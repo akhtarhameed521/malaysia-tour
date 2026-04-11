@@ -1,0 +1,4 @@
+export { AuthRoute } from "./auth/auth.route"
+export { UserRoute } from "./user/user.route"
+export { AdminRoute } from "./admin/admin.route"
+export { EmployeeRoute } from "./employee/employee.route"
