@@ -1,0 +1,58 @@
+
+
+
+{
+  
+    "hotelName": "Mandarin Oriental KL",
+    "checkin": "",
+    "checkout": "",
+  "teamDirectory": [
+    {
+      "groupType": "TRAVEL_LEAD",
+      "title": "Travel Lead",
+      "room": {
+        "number": "1204",
+        "floor": "12",
+        "label": "Room 1204 · 12th Floor"
+      },
+      "members": [
+        {
+          "id": "usr-001",
+          "isLead": true,
+          "image": "",
+          "name": "Farid Iskandar",
+          "role": "Travel Lead · TechVentures MY",
+          "contactInfo": "📍 Room 1204 · 12th Floor",
+          "description": "Lead point of contact for all travel & logistics. Reach Farid first for any issues."
+        }
+      ]
+    },
+     {
+      "groupType": "ROOM",
+      "room": {
+        "number": "1206",
+        "floor": "12",
+        "label": "Room 1206 · 12th Floor"
+      },
+      "members": [
+        {
+          "id": "usr-003",
+          "image": "",
+          "name": "Nurul Ain",
+          "role": "UX Designer",
+          "contactInfo": "+60 11-234 5678",
+          "description": "Attending UX & product design sessions. Available on WhatsApp anytime."
+        },
+        {
+          "id": "usr-004",
+          "image": "",
+          "name": "Raza Malik",
+          "role": "Senior Engineer",
+          "contactInfo": "+60 12-765 4321",
+          "description": "Covering AI & engineering sessions. Happy to co-attend workshops."
+        }
+      ]
+    }
+
+  ]
+}

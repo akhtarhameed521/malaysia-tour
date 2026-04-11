@@ -3,13 +3,14 @@ import express from "express";
 import * as dotenv from "dotenv";
 import cors from "cors";
 import * as http from "http";
+import path from "path";
 
 dotenv.config();
 
 import AppDataSource from "./config/db-config";
 import { initializeSocket } from "./config/socket";
 import { errorHandler } from "@middlewares/error-handler.middleware";
-import { AuthRoute,  UserRoute, AdminRoute, EmployeeRoute } from "./app";
+import { AuthRoute,  UserRoute, AdminRoute, EmployeeRoute, TripRoute } from "./app";
 
 const app = express();
 const server = http.createServer(app);
@@ -20,7 +21,8 @@ initializeSocket(server);
     await AppDataSource.initialize();
     console.log("Connected to PostgreSQL with TypeORM");
 
-    app.use(express.json());
+    app.use(express.json({ limit: "50mb" }));
+    app.use('/Uploads', express.static(path.join(process.cwd(), 'Uploads')));
     app.use(
       cors({
         origin: "*",
@@ -33,13 +35,14 @@ initializeSocket(server);
     const userRoute = new UserRoute()
     const adminRoute = new AdminRoute()
     const employeeRoute = new EmployeeRoute()
-
+    const tripRoute = new TripRoute()
 
    
     app.use('/api/auth', authRoute.router)
     app.use('/api/users', userRoute.router)
     app.use('/api/admin', adminRoute.router)
     app.use('/api/employees', employeeRoute.router)
+    app.use('/api/trips', tripRoute.router)
 
 
     app.use(errorHandler);
