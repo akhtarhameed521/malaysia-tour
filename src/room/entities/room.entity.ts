@@ -1,12 +1,9 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
   Column,
   ManyToOne,
-  OneToMany,
 } from "typeorm";
-import { Hotel } from "./hotel.entity";
-import { Member } from "./member.entity";
+import { Hotel } from "../../hotel/entities/hotel.entity";
 import { BaseAppEntity } from "@entities";
 
 @Entity()
@@ -26,9 +23,4 @@ export class Room extends BaseAppEntity {
     onDelete: "CASCADE",
   })
   hotel: Hotel;
-
-  @OneToMany(() => Member, (member) => member.room, {
-    cascade: true,
-  })
-  members: Member[];
 }

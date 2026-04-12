@@ -73,7 +73,8 @@ export class AuthService {
                     email: data.email,
                     phone: data.phone,
                     password: hashedPassword,
-                    image: imageUrl
+                    image: imageUrl,
+                    employee: employeeRecord
                 })
                 .where("id = :id", { id: existingUser.id })
                 .execute();
@@ -89,7 +90,8 @@ export class AuthService {
                     email: data.email,
                     phone: data.phone,
                     password: hashedPassword,
-                    image: imageUrl
+                    image: imageUrl,
+                    employee: employeeRecord
                 })
                 .returning('*')
                 .execute();
@@ -107,8 +109,10 @@ export class AuthService {
                 "user.employeeId",
                 "user.status",
                 "user.createdAt",
-                "user.updatedAt"
+                "user.updatedAt",
+                "employee"
             ])
+            .leftJoinAndSelect("user.employee", "employee")
             .where("user.id = :id", { id: userId })
             .getOne();
 
@@ -120,6 +124,7 @@ export class AuthService {
 
         const user = await this.userRepository.findOne({
             where: { email },
+            relations: { employee: true }
         });
 
         if (!user) {
