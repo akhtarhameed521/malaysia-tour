@@ -1,16 +1,21 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
   Column,
   OneToMany,
 } from "typeorm";
-import { Room } from "./room.entity";
+import { Room } from "../../room/entities/room.entity";
 import { BaseAppEntity } from "@entities";
 
 @Entity()
 export class Hotel extends BaseAppEntity {
   @Column()
-  hotelName: string;
+  name: string;
+
+  @Column({ type: "text", nullable: true })
+  description: string;
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  image: string;
 
   @Column({ nullable: true })
   checkin: string;

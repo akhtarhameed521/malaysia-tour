@@ -1,5 +1,6 @@
 import { BaseAppEntity } from "@entities";
-import { Column, Entity } from "typeorm";
+import { Column, Entity, JoinColumn, OneToOne } from "typeorm";
+import { EmployeeEntity } from "../../entities/employee.entity";
 
 @Entity("users")
 export class UserEntity extends BaseAppEntity {
@@ -22,4 +23,8 @@ export class UserEntity extends BaseAppEntity {
 
     @Column({ type: "varchar", length: 100, nullable: true })
     password: string
+
+    @OneToOne(() => EmployeeEntity, { nullable: true })
+    @JoinColumn({ name: "employee_id_fk" })
+    employee: EmployeeEntity;
 }

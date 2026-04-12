@@ -26,6 +26,9 @@ export class UserService {
                 createdAt: true,
                 updatedAt: true,
             },
+            relations: {
+                employee: true
+            },
             skip: (page - 1) * limit,
             take: limit
         });
@@ -48,6 +51,9 @@ export class UserService {
                 status: true,
                 createdAt: true,
                 updatedAt: true,
+            },
+            relations: {
+                employee: true
             },
         });
 
