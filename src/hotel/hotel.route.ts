@@ -15,9 +15,9 @@ export class HotelRoute {
     }
 
     private initializeRoutes() {
+        this.router.post("/", upload.single("image"), validateRequest(CreateHotelSchema), this.hotelController.create);
         this.router.get("/", this.hotelController.getAll);
         this.router.get("/:id", this.hotelController.getOne);
-        this.router.post("/", upload.single("image"), validateRequest(CreateHotelSchema), this.hotelController.create);
         this.router.put("/:id", upload.single("image"), validateRequest(UpdateHotelSchema), this.hotelController.update);
         this.router.delete("/:id", this.hotelController.delete);
     }

@@ -49,3 +49,9 @@ export enum BookingStatus {
   ServiceCompleted = "Service Completed",
   ServiceCancelled = "Service Cancelled",
 }
+
+export enum SessionTrack {
+  Track1 = "Track 1",
+  Track2 = "Track 2",
+  Track3 = "Track 3",
+}

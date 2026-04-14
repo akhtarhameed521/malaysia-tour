@@ -8,7 +8,7 @@ import { ApiResponse } from "../common/helper/api-success.helper";
 import * as bcrypt from "bcrypt";
 import { jwtSign, hashPassword } from "../common/helper/auth.helper";
 import { CreateEmployeeDto } from "./dto/auth.dto";
-import { uploadCloudinary } from "../common/provider/cloudinary.provider";
+import * as path from "path";
 
 export class AuthService {
     private userRepository = AppDataSource.getRepository(UserEntity);
@@ -52,10 +52,9 @@ export class AuthService {
 
         let imageUrl = "";
         if (imagePath) {
-            const uploadResult = await uploadCloudinary(imagePath);
-            if (uploadResult) {
-                imageUrl = uploadResult.secure_url;
-            }
+            const baseUrl = process.env.BASE_URL;
+            const filename = path.basename(imagePath);
+            imageUrl = `${baseUrl}/Uploads/${filename}`;
         }
 
         const hashedPassword = await hashPassword(data.password, 10);
