@@ -10,7 +10,7 @@ export class HotelService {
 
     async createHotel(data: CreateHotelDto): Promise<ApiResponse<Hotel>> {
         if (data.image) {
-            const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+            const baseUrl = process.env.BASE_URL;
             data.image = `${baseUrl}/Uploads/${data.image}`;
         }
 
@@ -40,7 +40,7 @@ export class HotelService {
         if (!hotel) throw new ApiError(statusCode.NotFound, "Hotel not found");
 
         if (data.image) {
-            const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+            const baseUrl = process.env.BASE_URL;
             data.image = `${baseUrl}/Uploads/${data.image}`;
         }
 
