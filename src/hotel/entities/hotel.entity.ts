@@ -8,7 +8,7 @@ import { BaseAppEntity } from "@entities";
 
 @Entity()
 export class Hotel extends BaseAppEntity {
-  @Column()
+  @Column({ nullable: true })
   name: string;
 
   @Column({ type: "text", nullable: true })

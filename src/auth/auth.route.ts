@@ -4,8 +4,7 @@ import { validateRequest } from "../common/middlewares/validation.middleware";
 import { 
     LoginUserSchema, 
     ChangePasswordSchema,
-    CreateEmployeeSchema,
-    RegisterUserSchema
+    CreateUserSchema,
 } from "./dto/auth.dto";
 import { authenticateToken } from "../common/middlewares/auth.middleware";
 import { upload } from "../common/provider/multer.provider";
@@ -22,16 +21,13 @@ export class AuthRoute {
 
     private initializeRoutes() {
         this.router.post(
-            "/employee",
-            validateRequest(CreateEmployeeSchema),
-            this.authController.createEmployee
-        );
-
-        this.router.post(
-            "/register",
-            upload.single("image"),
-            validateRequest(RegisterUserSchema),
-            this.authController.registerUser
+            "/create-user",
+            upload.fields([
+                { name: "image", maxCount: 1 },
+                { name: "ticketImage", maxCount: 1 }
+            ]),
+            validateRequest(CreateUserSchema),
+            this.authController.createUser
         );
 
         this.router.post(

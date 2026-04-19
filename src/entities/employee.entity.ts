@@ -4,7 +4,7 @@ import { Column, Entity } from "typeorm";
 @Entity("employees")
 export class EmployeeEntity extends BaseAppEntity {
 
-    @Column({ type: "varchar", length: 100, unique: true })
+    @Column({ type: "varchar", length: 100, unique: true, nullable: true })
     employeeId: string
 
     @Column({ type: "varchar", length: 100, nullable: true })
@@ -54,4 +54,7 @@ export class EmployeeEntity extends BaseAppEntity {
 
     @Column({ type: "varchar", length: 100, nullable: true })
     country: string
+
+    @Column({ type: "varchar", length: 255, nullable: true, select: false })
+    password: string
 }

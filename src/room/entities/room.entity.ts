@@ -10,17 +10,18 @@ import { BaseAppEntity } from "@entities";
 export class Room extends BaseAppEntity {
  
 
-  @Column({ type: "int" })
+  @Column({ type: "int", nullable: true })
   roomNumber: number;
 
-  @Column({ type: "int" })
+  @Column({ type: "int", nullable: true })
   floor: number;
 
-  @Column({ type: "varchar" })
+  @Column({ type: "varchar", nullable: true })
   groupType: string;
 
   @ManyToOne(() => Hotel, (hotel) => hotel.rooms, {
     onDelete: "CASCADE",
+    nullable: true
   })
   hotel: Hotel;
 }

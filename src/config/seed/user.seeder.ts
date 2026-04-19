@@ -1,6 +1,7 @@
 import { DataSource } from 'typeorm';
 import { Seeder, SeederFactoryManager } from 'typeorm-extension';
 import { EmployeeEntity } from '../../entities/employee.entity';
+import { hashPassword } from '../../common/helper/auth.helper';
 
 export default class EmployeeSeeder implements Seeder {
     public async run(
@@ -8,6 +9,7 @@ export default class EmployeeSeeder implements Seeder {
         factoryManager: SeederFactoryManager
     ): Promise<any> {
         const repository = dataSource.getRepository(EmployeeEntity);
+        const defaultPassword = await hashPassword('Welcome123', 10);
 
         const employeesData = [
             // Group-01
@@ -245,16 +247,18 @@ export default class EmployeeSeeder implements Seeder {
         for (const employeeData of employeesData) {
             let employee = await repository.findOne({ where: { employeeId: employeeData.employeeId } });
 
+            const dataWithPassword = { ...employeeData, password: defaultPassword };
+
             if (employee) {
                 // Update existing employee with new data
-                Object.assign(employee, employeeData);
+                Object.assign(employee, dataWithPassword);
                 await repository.save(employee);
-                console.log(`Employee ${employeeData.employeeId} updated successfully.`);
+                console.log(`Employee ${dataWithPassword.employeeId} updated successfully.`);
             } else {
                 // Create new employee
-                employee = repository.create(employeeData);
+                employee = repository.create(dataWithPassword);
                 await repository.save(employee);
-                console.log(`Employee ${employeeData.employeeId} seeded successfully.`);
+                console.log(`Employee ${dataWithPassword.employeeId} seeded successfully.`);
             }
         }
     }

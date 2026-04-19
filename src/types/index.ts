@@ -55,3 +55,18 @@ export enum SessionTrack {
   Track2 = "Track 2",
   Track3 = "Track 3",
 }
+
+export enum ExploreType {
+    PlaceToVisit = "Place To Visit",
+    Food = "Food",
+    GettingAround = "Getting Around",
+}
+
+export enum SafetyType {
+    Do = "Do",
+    Dont = "Dont",
+    GeneralSafety = "General Safety",
+    EmergencyContact = "Emergency Contact",
+    HealthNotice = "Health Notice",
+}
+

@@ -10,7 +10,7 @@ dotenv.config();
 import AppDataSource from "./config/db-config";
 import { initializeSocket } from "./config/socket";
 import { errorHandler } from "@middlewares/error-handler.middleware";
-import { AuthRoute,  UserRoute, AdminRoute, EmployeeRoute, HotelRoute, RoomRoute, GroupRoute, AirlineRoute, DayRoute, SessionRoute } from "./app";
+import { AuthRoute, AdminRoute, EmployeeRoute, HotelRoute, RoomRoute, GroupRoute, AirlineRoute, DayRoute, SessionRoute, ExploreRoute, SafetyRoute } from "./app";
 
 const app = express();
 const server = http.createServer(app);
@@ -32,7 +32,6 @@ initializeSocket(server);
     );
 
     const authRoute = new AuthRoute()
-    const userRoute = new UserRoute()
     const adminRoute = new AdminRoute()
     const employeeRoute = new EmployeeRoute()
     const hotelRoute = new HotelRoute()
@@ -41,10 +40,11 @@ initializeSocket(server);
     const airlineRoute = new AirlineRoute()
     const dayRoute = new DayRoute()
     const sessionRoute = new SessionRoute()
+    const exploreRoute = new ExploreRoute()
+    const safetyRoute = new SafetyRoute()
 
    
     app.use('/api/auth', authRoute.router)
-    app.use('/api/users', userRoute.router)
     app.use('/api/admin', adminRoute.router)
     app.use('/api/employees', employeeRoute.router)
     app.use('/api/hotel', hotelRoute.router)
@@ -53,6 +53,8 @@ initializeSocket(server);
     app.use('/api/airline', airlineRoute.router)
     app.use('/api/day', dayRoute.router)
     app.use('/api/session', sessionRoute.router)
+    app.use('/api/explore', exploreRoute.router)
+    app.use('/api/safety', safetyRoute.router)
 
 
     app.use(errorHandler);
