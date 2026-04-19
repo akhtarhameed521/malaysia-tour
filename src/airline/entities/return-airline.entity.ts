@@ -3,18 +3,18 @@ import { BaseAppEntity } from "@entities";
 
 @Entity()
 export class ReturnAirline extends BaseAppEntity {
-  @Column()
+  @Column({ nullable: true })
   name: string;
 
-  @Column()
+  @Column({ nullable: true })
   departureCity: string;
 
-  @Column()
+  @Column({ nullable: true })
   departureDate: string;
 
-  @Column()
+  @Column({ nullable: true })
   departureTime: string;
 
-  @Column({ default: true })
+  @Column({ default: true, nullable: true })
   isReturn: boolean;
 }
