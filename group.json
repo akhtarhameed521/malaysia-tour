@@ -1,58 +1,78 @@
-
-
-
 {
-  
-    "hotelName": "Mandarin Oriental KL",
-    "checkin": "",
-    "checkout": "",
-  "teamDirectory": [
+  "dos": [
     {
-      "groupType": "TRAVEL_LEAD",
-      "title": "Travel Lead",
-      "room": {
-        "number": "1204",
-        "floor": "12",
-        "label": "Room 1204 · 12th Floor"
-      },
-      "members": [
-        {
-          "id": "usr-001",
-          "isLead": true,
-          "image": "",
-          "name": "Farid Iskandar",
-          "role": "Travel Lead · TechVentures MY",
-          "contactInfo": "📍 Room 1204 · 12th Floor",
-          "description": "Lead point of contact for all travel & logistics. Reach Farid first for any issues."
-        }
-      ]
+      "id": "1",
+      "description": "Dress modestly"
     },
-     {
-      "groupType": "ROOM",
-      "room": {
-        "number": "1206",
-        "floor": "12",
-        "label": "Room 1206 · 12th Floor"
-      },
-      "members": [
-        {
-          "id": "usr-003",
-          "image": "",
-          "name": "Nurul Ain",
-          "role": "UX Designer",
-          "contactInfo": "+60 11-234 5678",
-          "description": "Attending UX & product design sessions. Available on WhatsApp anytime."
-        },
-        {
-          "id": "usr-004",
-          "image": "",
-          "name": "Raza Malik",
-          "role": "Senior Engineer",
-          "contactInfo": "+60 12-765 4321",
-          "description": "Covering AI & engineering sessions. Happy to co-attend workshops."
-        }
-      ]
+    {
+      "id": "2",
+      "description": "Dress modestly again"
     }
-
-  ]
+  ],
+  "donts": [
+    {
+      "id": "1",
+      "description": "Don't drink"
+    },
+    {
+      "id": "2",
+      "description": "Don't drink"
+    }
+  ],
+  "emergencyContacts": [
+    {
+      "id": "1",
+      "title": "Police",
+      "description": "031143245"
+    }
+  ],
+  "healthNotice": {
+    "id": "1",
+    "description": "some notice"
+  },
+  "generalSafety": [
+    {
+      "id": "1",
+      "title": "Secure",
+      "description": "Stay Safe"
+    },
+    {
+      "id": "2",
+      "description": "Dress modestly again"
+    }
+  ],
+  "explores": {
+    "PlaceToVisit": [
+      {
+        "title": "Kuala Lumpur Bird Park",
+        "description": "One of the world's largest free-flight aviaries, housing thousands of birds in a lush rainforest setting.",
+        "tag": "Nature & Wildlife",
+        "location": "Kuala Lumpur",
+        "rating": 4.8,
+        "distance": "5 km",
+        "duration": "2-3 hours",
+        "latitude": "3.1369° N",
+        "longitude": "101.6873° E",
+        "details": "Walk-in aviary with over 300 species, Daily feeding sessions at 10:30 AM and 3:30 PM, Educational shows and bird encounters",
+        "image": "https://example.com/images/kl-bird-park.jpg"
+      }
+    ],
+    "Foods": [
+      {
+        "id": "1",
+        "title": "Nasi Kandar Beratur",
+        "description": "A legendary late-night spot famous for its flavourful rice drenched in various curries and side dishes.",
+        "tag": "Local Cuisine",
+        "image": "https://example.com/images/nasi-kandar-beratur.jpg"
+      }
+    ],
+    "gettingAround": [
+      {
+        "title": "Public Transport",
+        "description": "Use buses, MRT, and taxis for convenient travel across the city.",
+        "tag": "Transport",
+        "image": "https://example.com/images/transport.jpg"
+      }
+    ]
+  }
 }

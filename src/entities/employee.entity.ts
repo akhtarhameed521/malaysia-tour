@@ -55,6 +55,9 @@ export class EmployeeEntity extends BaseAppEntity {
     @Column({ type: "varchar", length: 100, nullable: true })
     country: string
 
+    @Column({ type: "jsonb", nullable: true, default: [] })
+    sessions: any[]
+
     @Column({ type: "varchar", length: 255, nullable: true, select: false })
     password: string
 }

@@ -43,11 +43,16 @@ export const validateRequest = <T extends z.ZodTypeAny>(schema: T) => {
         let errorMessages: string[] = [];
 
         error.issues.forEach((issue) => {
-          // Agar invalid_union hai to uske nested errors nikal lo
-          if (issue.code === "invalid_union" && "errors" in issue) {
-            issue.errors.forEach((unionErrors: any) => {
-              unionErrors.forEach((innerErr: any) => {
-                errorMessages.push(innerErr.message);
+          // Handle discriminatedUnion discriminator errors
+          if ((issue.code as any) === "invalid_union_discriminator") {
+            const options = (issue as any).options?.join(", ") || "unknown";
+            errorMessages.push(`${issue.path.join(".")}: Invalid type. Expected one of: ${options}`);
+          // Flatten union errors for clearer feedback
+          } else if (issue.code === "invalid_union" && "errors" in issue) {
+            (issue.errors as any[]).forEach((iteration) => {
+              const issues = iteration.issues || iteration;
+              issues.forEach((innerErr: any) => {
+                errorMessages.push(`${innerErr.path.join(".")}: ${innerErr.message}`);
               });
             });
           } else if (issue.code === z.ZodIssueCode.unrecognized_keys) {

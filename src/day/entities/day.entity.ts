@@ -10,8 +10,5 @@ export class Day extends BaseAppEntity {
   @Column({ type: "date" })
   date: string; // TypeORM maps date to string (YYYY-MM-DD)
 
-  @OneToMany(() => Session, (session) => session.day, {
-    cascade: true,
-  })
-  sessions: Session[];
+ 
 }
