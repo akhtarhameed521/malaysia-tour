@@ -11,7 +11,8 @@ export class ExploreController {
     }
 
     create = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-        const result = await this.exploreService.createExplore(req.body);
+        const imagePath = req.file?.path;
+        const result = await this.exploreService.createExplore(req.body, imagePath);
         res.status(result.statusCode).json(result);
     });
 
@@ -27,7 +28,8 @@ export class ExploreController {
     });
 
     update = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-        const result = await this.exploreService.updateExplore(Number(req.params.id), req.body);
+        const imagePath = req.file?.path;
+        const result = await this.exploreService.updateExplore(Number(req.params.id), req.body, imagePath);
         res.status(result.statusCode).json(result);
     });
 

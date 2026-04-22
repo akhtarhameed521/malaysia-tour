@@ -1,7 +1,7 @@
-import { Entity, Column, ManyToOne, JoinColumn } from "typeorm";
+import { Entity, Column, ManyToMany, JoinTable } from "typeorm";
 import { BaseAppEntity } from "@entities";
-import { Day } from "../../day/entities/day.entity";
 import { SessionTrack } from "@types";
+import { GroupEntity } from "../../group/entities/group.entity";
 
 @Entity()
 export class Session extends BaseAppEntity {
@@ -9,7 +9,10 @@ export class Session extends BaseAppEntity {
   sessionTitle: string;
 
   @Column({ type: "time" })
-  time: string; // TypeORM maps time to string (HH:mm:ss)
+  time: string; 
+
+  @Column({ type: "date" })
+  date: string;
 
   @Column({ type: "varchar", length: 255 })
   location: string;
@@ -17,15 +20,10 @@ export class Session extends BaseAppEntity {
   @Column({ type: "varchar", length: 255 })
   speaker: string;
 
-  @Column({ type: "enum", enum: SessionTrack })
-  track: SessionTrack;
+  @Column({ type: "varchar", length: 255 })
+  track: string;
 
-  @ManyToOne(() => Day, (day) => day.sessions, {
-    onDelete: "CASCADE",
-  })
-  @JoinColumn({ name: "dayId" })
-  day: Day;
-
-  @Column()
-  dayId: number;
+  @ManyToMany(() => GroupEntity)
+  @JoinTable({ name: "session_groups" })
+  groups: GroupEntity[];
 }
