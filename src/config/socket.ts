@@ -1,5 +1,6 @@
 import { Server as HttpServer } from "http";
 import { Server, Socket } from "socket.io";
+import { registerChatSocket } from "../chat/chat.socket";
 
 let io: Server;
 
@@ -12,13 +13,8 @@ export const initializeSocket = (server: HttpServer) => {
         }
     });
 
-    io.on("connection", (socket: Socket) => {
-        console.log(`New client connected: ${socket.id}`);
-
-        socket.on("disconnect", () => {
-            console.log(`Client disconnected: ${socket.id}`);
-        });
-    });
+    // Register chat socket handlers
+    registerChatSocket(io);
 
     console.log("Socket.io initialized successfully.");
     return io;
