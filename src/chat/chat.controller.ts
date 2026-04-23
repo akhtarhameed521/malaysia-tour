@@ -127,4 +127,14 @@ export class ChatController {
         const result = await this.chatService.getAllChatImages(page, limit);
         res.status(result.statusCode).json(result);
     });
+
+    /**
+     * POST /api/chat/block/:userId
+     * Toggle block status for a user in the chat module
+     */
+    toggleBlockUser = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        const userId = Number(req.params.userId);
+        const result = await this.chatService.toggleBlockUser(userId);
+        res.status(result.statusCode).json(result);
+    });
 }

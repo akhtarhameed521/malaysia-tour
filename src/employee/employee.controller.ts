@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { EmployeeService } from "./employee.service";
 import { asyncHandler } from "../common/helper/async-handler.helper";
+import { ApiError } from "../common/helper/api-error.helper";
+import { statusCode } from "../common/messages/status-code.messages";
 
 export class EmployeeController {
     private employeeService: EmployeeService;
@@ -42,6 +44,15 @@ export class EmployeeController {
     deleteEmployee = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
         const { id } = req.params;
         const result = await this.employeeService.deleteEmployee(Number(id));
+        res.status(result.statusCode).json(result);
+    });
+
+    bulkUpload = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        const file = req.file;
+        if (!file) {
+            throw new ApiError(statusCode.BadRequest, "No file uploaded");
+        }
+        const result = await this.employeeService.bulkUpload(file.buffer);
         res.status(result.statusCode).json(result);
     });
 }

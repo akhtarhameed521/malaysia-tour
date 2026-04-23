@@ -45,6 +45,7 @@
     "socket.io": "^4.8.1",
     "typeorm": "^0.3.25",
     "typeorm-extension": "^3.7.1",
+    "xlsx": "^0.18.5",
     "zod": "^4.0.14"
   },
   "devDependencies": {

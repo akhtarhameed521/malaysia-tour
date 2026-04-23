@@ -42,5 +42,8 @@ export class ChatRoute {
 
         // Delete a message
         this.router.delete("/messages/:messageId", this.chatController.deleteMessage);
+
+        // Block/Unblock user in chat
+        this.router.post("/block/:userId", this.chatController.toggleBlockUser);
     }
 }
