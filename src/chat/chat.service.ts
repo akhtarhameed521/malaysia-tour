@@ -128,9 +128,14 @@ export class ChatService {
         }
 
         // Verify sender is a member
-        const isMember = room.members.some((m) => m.id === senderId);
+        const isMember = room.members.find((m) => m.id === senderId);
         if (!isMember) {
             throw new ApiError(statusCode.Forbidden, "You are not a member of this chat room");
+        }
+
+        // Check if user is blocked
+        if (isMember.isChatBlocked) {
+            throw new ApiError(statusCode.Forbidden, "Your chat access has been restricted");
         }
 
         // Handle image path
@@ -246,6 +251,11 @@ export class ChatService {
             throw new ApiError(statusCode.Forbidden, "You can only edit your own messages");
         }
 
+        const sender = await this.employeeRepository.findOneBy({ id: userId });
+        if (sender?.isChatBlocked) {
+            throw new ApiError(statusCode.Forbidden, "Your chat access has been restricted");
+        }
+
         message.content = data.content;
         await this.chatMessageRepository.save(message);
 
@@ -345,9 +355,30 @@ export class ChatService {
             throw new ApiError(statusCode.Forbidden, "You can only delete your own messages");
         }
 
+        const sender = await this.employeeRepository.findOneBy({ id: userId });
+        if (sender?.isChatBlocked) {
+            throw new ApiError(statusCode.Forbidden, "Your chat access has been restricted");
+        }
+
         const chatRoomId = message.chatRoomId;
         await this.chatMessageRepository.remove(message);
 
         return new ApiResponse(statusCode.OK, { messageId, chatRoomId }, "Message deleted successfully");
+    }
+
+    /**
+     * Toggles the block status of a user.
+     */
+    async toggleBlockUser(userId: number): Promise<ApiResponse<EmployeeEntity>> {
+        const employee = await this.employeeRepository.findOneBy({ id: userId });
+        if (!employee) {
+            throw new ApiError(statusCode.NotFound, "User not found");
+        }
+
+        employee.isChatBlocked = !employee.isChatBlocked;
+        await this.employeeRepository.save(employee);
+
+        const status = employee.isChatBlocked ? "blocked" : "unblocked";
+        return new ApiResponse(statusCode.OK, employee, `User chat access ${status} successfully`);
     }
 }

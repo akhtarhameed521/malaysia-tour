@@ -1,8 +1,11 @@
 import { Server, Socket } from "socket.io";
 import { ChatService } from "./chat.service";
 import { jwtVerify } from "../common/helper/auth.helper";
+import AppDataSource from "../config/db-config";
+import { EmployeeEntity } from "../entities/employee.entity";
 
 const chatService = new ChatService();
+const employeeRepository = AppDataSource.getRepository(EmployeeEntity);
 
 // Track online users: Map<userId, Set<socketId>>
 const onlineUsers = new Map<number, Set<string>>();
@@ -120,8 +123,13 @@ export const registerChatSocket = (io: Server) => {
         });
 
         // ─── TYPING INDICATOR ──────────────────────────────────
-        socket.on("typing_start", (data: { chatRoomId: number }) => {
+        socket.on("typing_start", async (data: { chatRoomId: number }) => {
             if (!authenticatedUserId) return;
+
+            // Check if user is blocked
+            const user = await employeeRepository.findOneBy({ id: authenticatedUserId });
+            if (user?.isChatBlocked) return;
+
             const roomChannel = `room_${data.chatRoomId}`;
             socket.to(roomChannel).emit("user_typing", {
                 userId: authenticatedUserId,

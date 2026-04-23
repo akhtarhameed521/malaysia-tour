@@ -4,16 +4,16 @@ import { Column, Entity } from "typeorm";
 @Entity("employees")
 export class EmployeeEntity extends BaseAppEntity {
 
-    @Column({ type: "varchar", length: 100, unique: true, nullable: true })
+    @Column({ type: "varchar", unique: true, nullable: true })
     employeeId: string
 
-    @Column({ type: "varchar", length: 100, nullable: true })
+    @Column({ type: "varchar", nullable: true })
     fullName: string
 
-    @Column({ type: "varchar", length: 100, nullable: true })
+    @Column({ type: "varchar", nullable: true })
     email: string
 
-    @Column({ type: "varchar", length: 20, nullable: true })
+    @Column({ type: "varchar", nullable: true })
     phone: string
 
     @Column({ type: "jsonb", nullable: true })
@@ -37,7 +37,7 @@ export class EmployeeEntity extends BaseAppEntity {
         departureCity: string
     }
 
-    @Column({ type: "varchar", length: 255, nullable: true })
+    @Column({ type: "varchar", nullable: true })
     hotel: string
 
     @Column({ type: "jsonb", nullable: true })
@@ -49,15 +49,82 @@ export class EmployeeEntity extends BaseAppEntity {
     @Column({ type: "text", nullable: true })
     ticketImage: string
 
-    @Column({ type: "varchar", length: 50, nullable: true })
+    @Column({ type: "varchar", nullable: true })
     role: string
 
-    @Column({ type: "varchar", length: 100, nullable: true })
+    @Column({ type: "varchar", nullable: true })
     country: string
+
+    @Column({ type: "varchar", nullable: true })
+    type: string
+
+    @Column({ type: "varchar", nullable: true })
+    globalId: string
+
+    @Column({ type: "varchar", nullable: true })
+    localId: string
+
+    @Column({ type: "varchar", nullable: true })
+    jobTitle: string
+
+    @Column({ type: "varchar", nullable: true })
+    function: string
+
+    @Column({ type: "varchar", nullable: true })
+    lineManager: string
+
+    @Column({ type: "varchar", nullable: true })
+    fastTrack: string
+
+    @Column({ type: "varchar", nullable: true })
+    advancePack: string
+
+    @Column({ type: "varchar", nullable: true })
+    regionDepartment: string
+
+    @Column({ type: "varchar", nullable: true })
+    flightStation: string
+
+    @Column({ type: "varchar", nullable: true })
+    gender: string
+
+    @Column({ type: "varchar", nullable: true })
+    passportNumber: string
+
+    @Column({ type: "varchar", nullable: true })
+    passportIssDate: string
+
+    @Column({ type: "varchar", nullable: true })
+    passportExpiryDate: string
+
+    @Column({ type: "varchar", nullable: true })
+    nicNumber: string
+
+    @Column({ type: "varchar", nullable: true })
+    arrivalTimeKUL: string
+
 
     @Column({ type: "jsonb", nullable: true, default: [] })
     sessions: any[]
 
-    @Column({ type: "varchar", length: 255, nullable: true, select: false })
+    @Column({ type: "boolean", default: false })
+    isChatBlocked: boolean
+
+    @Column({ type: "varchar", nullable: true })
+    additionalField1: string
+
+    @Column({ type: "varchar", nullable: true })
+    additionalField2: string
+
+    @Column({ type: "varchar", nullable: true })
+    additionalField3: string
+
+    @Column({ type: "varchar", nullable: true })
+    additionalField4: string
+
+    @Column({ type: "varchar", nullable: true })
+    additionalField5: string
+
+    @Column({ type: "varchar", nullable: true, select: false })
     password: string
 }

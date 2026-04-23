@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { EmployeeController } from "./employee.controller";
-import { upload } from "../common/provider/multer.provider";
+import { upload, memoryUpload } from "../common/provider/multer.provider";
 
 export class EmployeeRoute {
     public router: Router;
@@ -14,6 +14,7 @@ export class EmployeeRoute {
 
     private initializeRoutes() {
         this.router.get("/", this.employeeController.getAllEmployees);
+        this.router.post("/bulk-upload", memoryUpload.single("file"), this.employeeController.bulkUpload);
         this.router.get("/:id", this.employeeController.getEmployeeById);
         this.router.get("/eid/:eid", this.employeeController.getEmployeeByEmployeeId);
         this.router.put(
