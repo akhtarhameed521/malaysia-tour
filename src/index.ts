@@ -10,7 +10,7 @@ dotenv.config();
 import AppDataSource from "./config/db-config";
 import { initializeSocket } from "./config/socket";
 import { errorHandler } from "@middlewares/error-handler.middleware";
-import { AuthRoute, AdminRoute, EmployeeRoute, HotelRoute, RoomRoute, GroupRoute, AirlineRoute, DayRoute, SessionRoute, ExploreRoute, SafetyRoute, DiscoverRoute } from "./app";
+import { AuthRoute, AdminRoute, EmployeeRoute, HotelRoute, RoomRoute, GroupRoute, AirlineRoute, DayRoute, SessionRoute, ExploreRoute, SafetyRoute, DiscoverRoute, ChatRoute } from "./app";
 
 const app = express();
 const server = http.createServer(app);
@@ -43,6 +43,7 @@ initializeSocket(server);
     const exploreRoute = new ExploreRoute()
     const safetyRoute = new SafetyRoute()
     const discoverRoute = new DiscoverRoute()
+    const chatRoute = new ChatRoute()
 
    
     app.use('/api/auth', authRoute.router)
@@ -57,6 +58,7 @@ initializeSocket(server);
     app.use('/api/explore', exploreRoute.router)
     app.use('/api/safety', safetyRoute.router)
     app.use('/api/discover', discoverRoute.router)
+    app.use('/api/chat', chatRoute.router)
 
 
     app.use(errorHandler);

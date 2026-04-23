@@ -13,6 +13,7 @@ import { Airline } from "../airline/entities/airline.entity";
 import { ReturnAirline } from "../airline/entities/return-airline.entity";
 import * as path from "path";
 import { StatusEnum } from "../types";
+import { ChatService } from "../chat/chat.service";
 
 export class AuthService {
     private employeeRepository = AppDataSource.getRepository(EmployeeEntity);
@@ -156,7 +157,16 @@ export class AuthService {
 
         await this.employeeRepository.save(employee);
 
-        // 6. Return response (sanitized)
+        // 6. Auto-add user to global shared chat room
+        try {
+            const chatService = new ChatService();
+            await chatService.addUserToGlobalRoom(employee.id);
+        } catch (chatError) {
+            console.error("Failed to add user to global chat room:", chatError);
+            // Don't block user creation if chat fails
+        }
+
+        // 7. Return response (sanitized)
         const { password: _, ...employeeResponse } = employee;
         return new ApiResponse(statusCode.Created, employeeResponse, "Employee created successfully");
     }
