@@ -22,6 +22,33 @@ export class EmployeeService {
     private airlineRepository = AppDataSource.getRepository(Airline);
     private returnAirlineRepository = AppDataSource.getRepository(ReturnAirline);
 
+    private findMatchingGroup(airlineName: string | null, groups: GroupEntity[]): { id: string, name: string } | null {
+        if (!airlineName) return null;
+
+        const normAirline = airlineName.toLowerCase().trim();
+        const airlineFirstWord = normAirline.split(/\s+/)[0];
+
+        for (const group of groups) {
+            const normGroup = group.name.toLowerCase().trim();
+            const groupFirstWord = normGroup.split(/\s+/)[0];
+
+            // Match if:
+            // 1. First words are identical (e.g. "Thai" matches "THAI AIRWAYS")
+            // 2. One starts with the other
+            // 3. One contains the other
+            if (
+                (groupFirstWord && airlineFirstWord && groupFirstWord === airlineFirstWord) ||
+                normGroup.startsWith(normAirline) ||
+                normAirline.startsWith(normGroup) ||
+                normGroup.includes(normAirline) ||
+                normAirline.includes(normGroup)
+            ) {
+                return { id: group.id.toString(), name: group.name };
+            }
+        }
+        return null;
+    }
+
     async getAllEmployees(page: number = 1, limit: number = 10, groupId?: string): Promise<ApiResponse<EmployeeEntity[]>> {
         const whereCondition: any = {
             status: Not(StatusEnum.Deactivate)
@@ -172,10 +199,20 @@ export class EmployeeService {
         let createdCount = 0;
         let updatedCount = 0;
 
+        const groups = await this.groupRepository.find();
+
         for (const row of data as any[]) {
             const mappedData = this.mapExcelRowToEmployee(row);
             
             if (!mappedData.employeeId && !mappedData.email) continue;
+
+            // Auto-assign group if not present but airline exists
+            if ((!mappedData.group || !mappedData.group.id) && mappedData.airline?.name) {
+                const matchedGroup = this.findMatchingGroup(mappedData.airline.name, groups);
+                if (matchedGroup) {
+                    mappedData.group = matchedGroup;
+                }
+            }
 
             let employee = await this.employeeRepository.findOne({
                 where: [
@@ -324,4 +361,26 @@ export class EmployeeService {
  
     return mapped;
 }
+
+    async syncGroups(): Promise<ApiResponse<any>> {
+        const employees = await this.employeeRepository.find({
+            where: { status: Not(StatusEnum.Deactivate) }
+        });
+        const groups = await this.groupRepository.find();
+        
+        let updatedCount = 0;
+
+        for (const employee of employees) {
+            if ((!employee.group || !employee.group.id) && employee.airline?.name) {
+                const matchedGroup = this.findMatchingGroup(employee.airline.name, groups);
+                if (matchedGroup) {
+                    employee.group = matchedGroup;
+                    await this.employeeRepository.save(employee);
+                    updatedCount++;
+                }
+            }
+        }
+
+        return new ApiResponse(statusCode.OK, { updatedCount }, `${updatedCount} employees' groups auto-assigned successfully`);
+    }
 }

@@ -9,6 +9,8 @@ swagger.yaml
 .env.development
 .env.production
 .env.staging
+firebase-service-account.json
+firebase-key-debug.txt
 
 
 # Logs

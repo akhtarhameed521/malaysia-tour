@@ -4,6 +4,7 @@ import { email, z } from "zod";
 export const LoginUserSchema = z.object({
     email: z.string().email("Invalid email format"),
     password: z.string().min(6).max(100),
+    fcmToken: z.string().optional(),
 }).strict();
 
 export const ChangePasswordSchema = z.object({

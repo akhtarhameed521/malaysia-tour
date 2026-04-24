@@ -30,10 +30,24 @@ const fileFilter = (
 ) => {
   const allowedImageTypes = ["image/jpeg", "image/png", "image/gif"];
   const allowedVideoTypes = ["video/mp4", "video/mpeg", "video/webm"];
-  if (allowedImageTypes.includes(file.mimetype) || allowedVideoTypes.includes(file.mimetype)) {
+  const allowedDocTypes = [
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "text/csv",
+  ];
+
+  if (
+    allowedImageTypes.includes(file.mimetype) ||
+    allowedVideoTypes.includes(file.mimetype) ||
+    allowedDocTypes.includes(file.mimetype)
+  ) {
     cb(null, true);
   } else {
-    cb(new Error("Only JPEG, PNG, GIF images and MP4, MPEG, WEBM videos are allowed"));
+    cb(
+      new Error(
+        "Only JPEG, PNG, GIF images, MP4, MPEG, WEBM videos, and XLSX, XLS, CSV spreadsheets are allowed"
+      )
+    );
   }
 };
 

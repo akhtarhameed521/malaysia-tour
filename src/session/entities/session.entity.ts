@@ -17,13 +17,16 @@ export class Session extends BaseAppEntity {
   @Column({ type: "varchar", length: 255 })
   location: string;
 
-  @Column({ type: "varchar", length: 255 })
+  @Column({ type: "varchar", length: 255, nullable: true })
   speaker: string;
+
+  @Column({ type: "varchar", length: 255, nullable: true })
+  airlineName: string;
 
   @Column({ type: "varchar", length: 255 })
   track: string;
 
-  @ManyToMany(() => GroupEntity)
+  @ManyToMany(() => GroupEntity, { cascade: true })
   @JoinTable({ name: "session_groups" })
   groups: GroupEntity[];
 }
