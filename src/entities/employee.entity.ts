@@ -111,6 +111,9 @@ export class EmployeeEntity extends BaseAppEntity {
     isChatBlocked: boolean
 
     @Column({ type: "varchar", nullable: true })
+    fcmToken: string
+
+    @Column({ type: "varchar", nullable: true })
     additionalField1: string
 
     @Column({ type: "varchar", nullable: true })

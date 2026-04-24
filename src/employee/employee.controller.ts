@@ -55,4 +55,9 @@ export class EmployeeController {
         const result = await this.employeeService.bulkUpload(file.buffer);
         res.status(result.statusCode).json(result);
     });
+
+    syncGroups = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        const result = await this.employeeService.syncGroups();
+        res.status(result.statusCode).json(result);
+    });
 }

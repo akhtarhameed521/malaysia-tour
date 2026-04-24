@@ -45,6 +45,12 @@ export class AuthService {
             throw new ApiError(statusCode.UnAuthorized, "Invalid password");
         }
 
+        // Update fcmToken if provided
+        if (data.fcmToken) {
+            employee.fcmToken = data.fcmToken;
+            await this.employeeRepository.save(employee);
+        }
+
         const token = jwtSign(employee.id, employee.employeeId, employee.fullName);
 
         // Sanitize response (remove password)
