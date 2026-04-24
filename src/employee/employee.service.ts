@@ -181,7 +181,8 @@ export class EmployeeService {
 
     async adminChangePassword(data: AdminChangePasswordDto): Promise<ApiResponse<null>> {
         const employee = await this.employeeRepository.findOne({
-            where: { employeeId: data.employeeId.toString(), status: Not(StatusEnum.Deactivate) }
+            where: { id: Number(data.employeeId), status: Not(StatusEnum.Deactivate) },
+            select: ["id", "password"]
         });
 
         if (!employee) {
