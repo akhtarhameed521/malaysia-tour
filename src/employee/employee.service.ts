@@ -12,7 +12,8 @@ import { Airline } from "../airline/entities/airline.entity";
 import { ReturnAirline } from "../airline/entities/return-airline.entity";
 import * as path from "path";
 import * as xlsx from "xlsx";
-import { hashPassword } from "../common/helper/auth.helper";
+import { hashPassword, comparePassword } from "../common/helper/auth.helper";
+import { AdminChangePasswordDto } from "../auth/dto/auth.dto";
 
 export class EmployeeService {
     private employeeRepository = AppDataSource.getRepository(EmployeeEntity);
@@ -176,6 +177,21 @@ export class EmployeeService {
 
         await this.employeeRepository.save(employee);
         return new ApiResponse(statusCode.OK, employee, "Employee updated successfully");
+    }
+
+    async adminChangePassword(data: AdminChangePasswordDto): Promise<ApiResponse<null>> {
+        const employee = await this.employeeRepository.findOne({
+            where: { employeeId: data.employeeId.toString(), status: Not(StatusEnum.Deactivate) }
+        });
+
+        if (!employee) {
+            throw new ApiError(statusCode.NotFound, "Employee not found");
+        }
+
+        employee.password = await hashPassword(data.newPassword, 10);
+        await this.employeeRepository.save(employee);
+
+        return new ApiResponse(statusCode.OK, null, "Password changed successfully");
     }
 
     async deleteEmployee(id: number): Promise<ApiResponse<null>> {

@@ -23,7 +23,8 @@ export class SessionController {
     });
 
     getAll = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-        const result = await this.sessionService.getAllSessions();
+        const groupId = req.query.groupId ? Number(req.query.groupId) : undefined;
+        const result = await this.sessionService.getAllSessions(groupId);
         res.status(result.statusCode).json(result);
     });
 

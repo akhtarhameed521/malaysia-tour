@@ -22,6 +22,10 @@ export const jwtVerify = (token: string) => {
   };
 };
 
+export const comparePassword = (password: string, hash: string) => {
+  return bcrypt.compare(password, hash);
+};
+
 export const hashPassword = (password: string, count: number) => {
   return bcrypt.hash(password, count);
 };
