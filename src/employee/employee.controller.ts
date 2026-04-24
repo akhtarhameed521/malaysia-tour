@@ -41,6 +41,11 @@ export class EmployeeController {
         res.status(result.statusCode).json(result);
     });
 
+    adminChangePassword = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        const result = await this.employeeService.adminChangePassword(req.body);
+        res.status(result.statusCode).json(result);
+    });
+
     deleteEmployee = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
         const { id } = req.params;
         const result = await this.employeeService.deleteEmployee(Number(id));

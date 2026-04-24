@@ -3,7 +3,6 @@ import { SessionController } from "./session.controller";
 import { validateRequest } from "../common/middlewares/validation.middleware";
 import { CreateSessionSchema, UpdateSessionSchema } from "./dto/session.dto";
 import { upload } from "../common/provider/multer.provider";
-import { authenticateToken } from "../common/middlewares/auth.middleware";
 
 export class SessionRoute {
     public router: Router;
@@ -16,8 +15,6 @@ export class SessionRoute {
     }
 
     private initializeRoutes() {
-        this.router.use(authenticateToken);
-
         this.router.get("/me", this.sessionController.getSessionsByMe);
         
         this.router.post("/bulk-upload", upload.single('file'), this.sessionController.bulkUpload);
@@ -26,6 +23,5 @@ export class SessionRoute {
         this.router.get("/:id", this.sessionController.getOne);
         this.router.put("/:id", validateRequest(UpdateSessionSchema), this.sessionController.update);
         this.router.delete("/:id", this.sessionController.delete);
-        
     }
 }

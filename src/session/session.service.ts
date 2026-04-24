@@ -112,10 +112,19 @@ export class SessionService {
         return new ApiResponse(statusCode.Created, session, "Session created successfully");
     }
 
-    async getAllSessions(): Promise<ApiResponse<Session[]>> {
-        const sessions = await this.sessionRepository.find({
-            relations: ["groups"]
-        });
+    async getAllSessions(groupId?: number): Promise<ApiResponse<Session[]>> {
+        const query: any = {
+            relations: ["groups"],
+            order: { date: "ASC", time: "ASC" }
+        };
+
+        if (groupId) {
+            query.where = {
+                groups: { id: groupId }
+            };
+        }
+
+        const sessions = await this.sessionRepository.find(query);
         return new ApiResponse(statusCode.OK, sessions, "Sessions retrieved successfully");
     }
 

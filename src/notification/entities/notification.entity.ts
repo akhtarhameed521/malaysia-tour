@@ -1,5 +1,6 @@
 import { BaseAppEntity } from "../../entities/base.entity";
-import { Column, Entity } from "typeorm";
+import { Column, Entity, ManyToOne, JoinColumn } from "typeorm";
+import { EmployeeEntity } from "../../entities/employee.entity";
 
 @Entity("notifications")
 export class Notification extends BaseAppEntity {
@@ -18,4 +19,8 @@ export class Notification extends BaseAppEntity {
 
     @Column({ type: "int", default: 0 })
     order: number;
+
+    @ManyToOne(() => EmployeeEntity, { nullable: true, onDelete: "CASCADE" })
+    @JoinColumn({ name: "employeeId" })
+    employee: EmployeeEntity;
 }

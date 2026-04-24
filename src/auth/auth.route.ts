@@ -6,7 +6,6 @@ import {
     ChangePasswordSchema,
     CreateUserSchema,
 } from "./dto/auth.dto";
-import { authenticateToken } from "../common/middlewares/auth.middleware";
 import { upload } from "../common/provider/multer.provider";
 
 export class AuthRoute {
@@ -38,7 +37,6 @@ export class AuthRoute {
 
         this.router.post(
             "/change-password",
-            authenticateToken,
             validateRequest(ChangePasswordSchema),
             this.authController.changePassword
         );

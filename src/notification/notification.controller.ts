@@ -17,7 +17,8 @@ export class NotificationController {
     getAllNotifications = asyncHandler(async (req: Request, res: Response) => {
         const page = Number(req.query.page) || 1;
         const limit = Number(req.query.limit) || 20;
-        const result = await this.notificationService.getAllNotifications(page, limit);
+        const employeeId = req.query.employeeId ? Number(req.query.employeeId) : undefined;
+        const result = await this.notificationService.getAllNotifications(page, limit, employeeId);
         res.status(result.statusCode).json(result);
     });
 

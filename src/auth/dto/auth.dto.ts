@@ -1,6 +1,5 @@
 import { email, z } from "zod";
 
-
 export const LoginUserSchema = z.object({
     email: z.string().email("Invalid email format"),
     password: z.string().min(6).max(100),
@@ -8,9 +7,19 @@ export const LoginUserSchema = z.object({
 }).strict();
 
 export const ChangePasswordSchema = z.object({
-    userId: z.number().int().positive(),
-    newPassword: z.string().min(6).max(100),
-    confirmPassword: z.string().min(6).max(100),
+    userId: z.coerce.number().int().positive(),
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(6, "New password must be at least 6 characters").max(100),
+    confirmPassword: z.string().min(6, "Confirm password must be at least 6 characters").max(100),
+}).strict().refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+});
+
+export const AdminChangePasswordSchema = z.object({
+    employeeId: z.coerce.number().int().positive().min(1, "Employee ID is required"),
+    newPassword: z.string().min(6, "New password must be at least 6 characters").max(100),
+    confirmPassword: z.string().min(6, "Confirm password must be at least 6 characters").max(100),
 }).strict().refine((data) => data.newPassword === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
@@ -33,4 +42,5 @@ export const CreateUserSchema = z.object({
 
 export type LoginUserDto = z.infer<typeof LoginUserSchema>;
 export type ChangePasswordDto = z.infer<typeof ChangePasswordSchema>;
+export type AdminChangePasswordDto = z.infer<typeof AdminChangePasswordSchema>;
 export type CreateUserDto = z.infer<typeof CreateUserSchema>;

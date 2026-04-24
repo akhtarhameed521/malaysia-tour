@@ -14,6 +14,7 @@ import { ReturnAirline } from "../airline/entities/return-airline.entity";
 import * as path from "path";
 import { StatusEnum } from "../types";
 import { ChatService } from "../chat/chat.service";
+import { Not } from "typeorm";
 
 export class AuthService {
     private employeeRepository = AppDataSource.getRepository(EmployeeEntity);
@@ -26,10 +27,11 @@ export class AuthService {
     async loginUser(data: LoginUserDto): Promise<ApiResponse<any>> {
         const { email, password } = data;
 
-        const employee = await this.employeeRepository.findOne({
-            where: { email },
-            select: ["id", "fullName", "email", "phone", "image", "employeeId", "password", "status", "role", "country", "group"]
-        });
+        // Fetch user with all fields, explicitly including password which is select: false
+        const employee = await this.employeeRepository.createQueryBuilder("employee")
+            .addSelect("employee.password")
+            .where("employee.email = :email", { email })
+            .getOne();
 
         if (!employee) {
             throw new ApiError(statusCode.NotFound, "Employee not found with this email");
@@ -55,27 +57,28 @@ export class AuthService {
 
         // Sanitize response (remove password)
         const { password: _, ...employeeResponse } = employee;
-        const finalResponse = {
-            ...employeeResponse,
-            groupId: employee.group?.id || null
-        };
-
-        return new ApiResponse(statusCode.OK, { user: finalResponse, token }, "Login successful");
+        
+        return new ApiResponse(statusCode.OK, { user: employeeResponse, token }, "Login successful");
     }
 
-    async changePassword(data: ChangePasswordDto): Promise<ApiResponse<any>> {
-        const { userId, newPassword } = data;
+    async changePassword(userId: number, data: ChangePasswordDto): Promise<ApiResponse<any>> {
+        const { currentPassword, newPassword } = data;
 
         const employee = await this.employeeRepository.findOne({
-            where: { id: userId },
+            where: { id: userId, status: Not(StatusEnum.Deactivate) },
+            select: ["id", "password"]
         });
 
         if (!employee) {
             throw new ApiError(statusCode.NotFound, "Employee not found");
         }
 
-        const hashedPassword = await hashPassword(newPassword, 10);
-        employee.password = hashedPassword;
+        const isMatch = await bcrypt.compare(currentPassword, employee.password);
+        if (!isMatch) {
+            throw new ApiError(statusCode.BadRequest, "Incorrect current password");
+        }
+
+        employee.password = await hashPassword(newPassword, 10);
         await this.employeeRepository.save(employee);
 
         return new ApiResponse(statusCode.OK, null, "Password changed successfully");
@@ -117,7 +120,7 @@ export class AuthService {
             if (airline) {
                 airlineData = {
                     name: airline.name,
-                    details: "", // Note: details field isn't in Airline entity, keeping empty or you can map another field
+                    details: "", 
                     departureCity: airline.departureCity,
                     departureDate: airline.departureDate,
                     departureTime: airline.departureTime

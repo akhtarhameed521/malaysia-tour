@@ -16,7 +16,9 @@ export class AuthController {
     });
 
     public changePassword = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-        const result = await this.authService.changePassword(req.body);
+        // Since authorization is removed, we expect userId to be provided in the request body
+        const { userId } = req.body;
+        const result = await this.authService.changePassword(Number(userId), req.body);
         res.status(result.statusCode).json(result);
     });
 

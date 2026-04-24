@@ -14,13 +14,49 @@ export class NotificationService {
     private employeeRepository = AppDataSource.getRepository(EmployeeEntity);
 
     async createNotification(data: CreateNotificationDto): Promise<ApiResponse<Notification>> {
-        const notification = this.notificationRepository.create(data);
+        const { employeeId, ...notifData } = data;
+        const notification = this.notificationRepository.create(notifData);
+
+        if (employeeId) {
+            const employee = await this.employeeRepository.findOneBy({ id: employeeId });
+            if (!employee) throw new ApiError(statusCode.NotFound, "Employee not found");
+            notification.employee = employee;
+        }
+
         await this.notificationRepository.save(notification);
 
-        // Send Push Notification to all employees with FCM tokens
-        this.sendPushNotificationToAll(notification.title, notification.message);
+        // Send Push Notification
+        if (employeeId) {
+            const employee = await this.employeeRepository.findOneBy({ id: employeeId });
+            if (employee?.fcmToken) {
+                this.sendPushNotification([employee.fcmToken], notification.title, notification.message);
+            }
+        } else {
+            this.sendPushNotificationToAll(notification.title, notification.message);
+        }
 
         return new ApiResponse(statusCode.Created, notification, "Notification created successfully");
+    }
+
+    private async sendPushNotification(tokens: string[], title: string, message: string) {
+        try {
+            if (tokens.length === 0) return;
+
+            const payload = {
+                notification: { title, body: message },
+                data: { click_action: "FLUTTER_NOTIFICATION_CLICK", type: "general" }
+            };
+
+            const response = await admin.messaging().sendEachForMulticast({
+                tokens: tokens,
+                notification: payload.notification,
+                data: payload.data
+            });
+
+            console.log(`Successfully sent ${response.successCount} push notifications.`);
+        } catch (error) {
+            console.error("Error sending push notifications:", error);
+        }
     }
 
     private async sendPushNotificationToAll(title: string, message: string) {
@@ -31,51 +67,40 @@ export class NotificationService {
                 .andWhere("employee.fcmToken != :empty", { empty: "" })
                 .getMany();
 
-            const tokens = employees.map(e => e.fcmToken);
-
-            if (tokens.length === 0) return;
-
-            const payload = {
-                notification: {
-                    title: title,
-                    body: message,
-                },
-                data: {
-                    click_action: "FLUTTER_NOTIFICATION_CLICK",
-                    type: "general"
-                }
-            };
-
-            const response = await admin.messaging().sendEachForMulticast({
-                tokens: tokens,
-                notification: payload.notification,
-                data: payload.data
-            });
-
-            console.log(`Successfully sent ${response.successCount} push notifications. Failures: ${response.failureCount}`);
+            const tokens = employees.map(e => e.fcmToken).filter(t => !!t);
+            await this.sendPushNotification(tokens, title, message);
         } catch (error) {
-            console.error("Error sending push notifications:", error);
+            console.error("Error sending push notifications to all:", error);
         }
     }
 
-    async getAllNotifications(page: number = 1, limit: number = 20): Promise<ApiResponse<Notification[]>> {
-        const [notifications, total] = await this.notificationRepository.findAndCount({
-            where: { 
-                status: Not(StatusEnum.Deactivate)
-            },
+    async getAllNotifications(page: number = 1, limit: number = 20, employeeId?: number): Promise<ApiResponse<Notification[]>> {
+        const query: any = {
+            where: { status: Not(StatusEnum.Deactivate) },
             order: { order: "ASC", createdAt: "DESC" },
+            relations: ["employee"],
             skip: (page - 1) * limit,
             take: limit,
-        });
+        };
+
+        if (employeeId) {
+            // Find notifications sent to this specific employee OR sent to everyone (null employee)
+            query.where = [
+                { employee: { id: employeeId }, status: Not(StatusEnum.Deactivate) },
+                { employee: null, status: Not(StatusEnum.Deactivate) }
+            ];
+        }
+
+        const [notifications, total] = await this.notificationRepository.findAndCount(query);
 
         const lastPage = Math.ceil(total / limit);
         return new ApiResponse(statusCode.OK, notifications, "Notifications retrieved successfully", page, total, lastPage);
     }
 
     async getNotificationById(id: number): Promise<ApiResponse<Notification>> {
-        const notification = await this.notificationRepository.findOneBy({ 
-            id,
-            status: Not(StatusEnum.Deactivate)
+        const notification = await this.notificationRepository.findOne({ 
+            where: { id, status: Not(StatusEnum.Deactivate) },
+            relations: ["employee"]
         });
         if (!notification) {
             throw new ApiError(statusCode.NotFound, "Notification not found");
@@ -89,7 +114,15 @@ export class NotificationService {
             throw new ApiError(statusCode.NotFound, "Notification not found");
         }
 
-        Object.assign(notification, data);
+        const { employeeId, ...notifData } = data;
+        if (employeeId) {
+            const employee = await this.employeeRepository.findOneBy({ id: employeeId });
+            if (employee) notification.employee = employee;
+        } else if (employeeId === null) {
+            notification.employee = null as any;
+        }
+
+        Object.assign(notification, notifData);
         await this.notificationRepository.save(notification);
         return new ApiResponse(statusCode.OK, notification, "Notification updated successfully");
     }
