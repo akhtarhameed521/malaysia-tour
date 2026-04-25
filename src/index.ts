@@ -11,6 +11,7 @@ import AppDataSource from "./config/db-config";
 import { initializeSocket } from "./config/socket";
 import { errorHandler } from "@middlewares/error-handler.middleware";
 import { AuthRoute, AdminRoute, EmployeeRoute, HotelRoute, RoomRoute, GroupRoute, AirlineRoute, DayRoute, SessionRoute, ExploreRoute, SafetyRoute, DiscoverRoute, ChatRoute, NotificationRoute } from "./app";
+import { startSessionCronJobs } from "./session/session.cron";
 
 const app = express();
 const server = http.createServer(app);
@@ -20,6 +21,7 @@ initializeSocket(server);
   try {
     await AppDataSource.initialize();
     console.log("Connected to PostgreSQL with TypeORM");
+    startSessionCronJobs();
 
     app.use(express.json({ limit: "50mb" }));
     app.use('/Uploads', express.static(path.join(process.cwd(), 'Uploads')));
