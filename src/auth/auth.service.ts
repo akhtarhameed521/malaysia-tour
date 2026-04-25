@@ -85,7 +85,7 @@ export class AuthService {
     }
 
     async createUser(data: CreateUserDto, imagePath?: string, ticketImagePath?: string): Promise<ApiResponse<any>> {
-        const { groupId, hotelId, roomId, airlineId, returnAirlineId, password, ...restData } = data;
+        const { groupId, hotelId, roomId, airlineId, returnAirlineId, password, sessions, isChatBlocked, ...restData } = data;
 
         // 1. Check if employee already exists
         const existingEmployee = await this.employeeRepository.findOne({
@@ -161,6 +161,8 @@ export class AuthService {
             returnAirline: returnAirlineData,
             image: imageUrl,
             ticketImage: ticketImageUrl,
+            isChatBlocked: isChatBlocked?.toString() === 'true',
+            sessions: typeof sessions === 'string' ? JSON.parse(sessions) : (sessions || []),
             status: StatusEnum.Active
         });
 
