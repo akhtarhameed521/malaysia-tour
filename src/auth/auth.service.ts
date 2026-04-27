@@ -30,7 +30,7 @@ export class AuthService {
         // Fetch user with all fields, explicitly including password which is select: false
         const employee = await this.employeeRepository.createQueryBuilder("employee")
             .addSelect("employee.password")
-            .where("employee.email = :email", { email })
+            .where("LOWER(employee.email) = LOWER(:email)", { email })
             .getOne();
 
         if (!employee) {
@@ -88,9 +88,10 @@ export class AuthService {
         const { groupId, hotelId, roomId, airlineId, returnAirlineId, password, sessions, isChatBlocked, ...restData } = data;
 
         // 1. Check if employee already exists
-        const existingEmployee = await this.employeeRepository.findOne({
-            where: [{ employeeId: data.employeeId }, { email: data.email }]
-        });
+        const existingEmployee = await this.employeeRepository.createQueryBuilder("employee")
+            .where("employee.employeeId = :employeeId", { employeeId: data.employeeId })
+            .orWhere("LOWER(employee.email) = LOWER(:email)", { email: data.email })
+            .getOne();
         if (existingEmployee) {
             throw new ApiError(statusCode.BadRequest, "Employee with this ID or Email already exists");
         }
@@ -153,6 +154,7 @@ export class AuthService {
         // 5. Create Employee
         const employee = this.employeeRepository.create({
             ...restData,
+            email: data.email?.toLowerCase(),
             password: hashedPassword,
             group: groupData,
             hotel: hotelName,

@@ -103,20 +103,21 @@ export class EmployeeService {
         const { groupId, hotelId, roomId, airlineId, returnAirlineId, ...restData } = data;
 
         // 0. Check for duplicate employeeId or email only if they are changing
-        const duplicateConditions: any[] = [];
         if (restData.employeeId && restData.employeeId !== employee.employeeId) {
-            duplicateConditions.push({ employeeId: restData.employeeId, id: Not(id) });
-        }
-        if (restData.email && restData.email !== employee.email) {
-            duplicateConditions.push({ email: restData.email, id: Not(id) });
-        }
-
-        if (duplicateConditions.length > 0) {
             const duplicate = await this.employeeRepository.findOne({
-                where: duplicateConditions
+                where: { employeeId: restData.employeeId, id: Not(id) }
             });
             if (duplicate) {
-                throw new ApiError(statusCode.BadRequest, "Employee ID or Email already taken by another account");
+                throw new ApiError(statusCode.BadRequest, "Employee ID already taken by another account");
+            }
+        }
+        if (restData.email && restData.email.toLowerCase() !== employee.email?.toLowerCase()) {
+            const duplicate = await this.employeeRepository.createQueryBuilder("employee")
+                .where("LOWER(employee.email) = LOWER(:email)", { email: restData.email })
+                .andWhere("employee.id != :id", { id })
+                .getOne();
+            if (duplicate) {
+                throw new ApiError(statusCode.BadRequest, "Email already taken by another account");
             }
         }
 
@@ -173,6 +174,7 @@ export class EmployeeService {
 
         // 3. Assign rest data (excluding password which should be handled by changePassword)
         if (restData.password) delete restData.password;
+        if (restData.email) restData.email = restData.email.toLowerCase();
         Object.assign(employee, restData);
 
         await this.employeeRepository.save(employee);
@@ -231,12 +233,10 @@ export class EmployeeService {
                 }
             }
 
-            let employee = await this.employeeRepository.findOne({
-                where: [
-                    { employeeId: mappedData.employeeId },
-                    { email: mappedData.email }
-                ]
-            });
+            let employee = await this.employeeRepository.createQueryBuilder("employee")
+                .where("employee.employeeId = :employeeId", { employeeId: mappedData.employeeId })
+                .orWhere("LOWER(employee.email) = LOWER(:email)", { email: mappedData.email })
+                .getOne();
 
             if (employee) {
                 Object.assign(employee, mappedData);
@@ -295,7 +295,7 @@ export class EmployeeService {
         : null);
  
     // Contact
-    mapped.email  = str(normRow['email']);
+    mapped.email  = str(normRow['email'])?.toLowerCase();
     mapped.phone  = str(normRow['cell #'] ?? normRow['phone no'] ?? normRow['phone'] ?? normRow['mobile'] ?? normRow['contact']);
  
     // Job / HR fields

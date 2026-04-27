@@ -1,5 +1,5 @@
 import { BaseAppEntity } from "./base.entity";
-import { Column, Entity } from "typeorm";
+import { Column, Entity, BeforeInsert, BeforeUpdate } from "typeorm";
 
 @Entity("employees")
 export class EmployeeEntity extends BaseAppEntity {
@@ -130,4 +130,12 @@ export class EmployeeEntity extends BaseAppEntity {
 
     @Column({ type: "varchar", nullable: true, select: false })
     password: string
+
+    @BeforeInsert()
+    @BeforeUpdate()
+    lowercaseEmail() {
+        if (this.email) {
+            this.email = this.email.toLowerCase();
+        }
+    }
 }
