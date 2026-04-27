@@ -1,7 +1,7 @@
 import { email, z } from "zod";
 
 export const LoginUserSchema = z.object({
-    email: z.string().email("Invalid email format"),
+    email: z.string().email("Invalid email format").transform((val) => val.toLowerCase()),
     password: z.string().min(6).max(100),
     fcmToken: z.string().optional(),
 }).strict();
@@ -28,7 +28,7 @@ export const AdminChangePasswordSchema = z.object({
 export const CreateUserSchema = z.object({
     employeeId: z.string().min(1, "Employee ID is required"),
     fullName: z.string().min(1, "Full Name is required"),
-    email: z.string().email("Invalid email format"),
+    email: z.string().email("Invalid email format").transform((val) => val.toLowerCase()),
     phone: z.string().min(1, "Phone is required"),
     password: z.string().min(6, "Password must be at least 6 characters"),
     groupId: z.coerce.number().int().positive().optional(),
