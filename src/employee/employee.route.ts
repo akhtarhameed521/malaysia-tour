@@ -17,7 +17,10 @@ export class EmployeeRoute {
     private initializeRoutes() {
         this.router.get("/", this.employeeController.getAllEmployees);
         this.router.post("/bulk-upload", memoryUpload.single("file"), this.employeeController.bulkUpload);
+        this.router.post("/bulk-upload-missing", memoryUpload.single("file"), this.employeeController.bulkUploadMissing);
         this.router.post("/sync-groups", this.employeeController.syncGroups);
+        this.router.post("/assign-group", this.employeeController.assignGroup);
+        this.router.post("/remove-group", this.employeeController.removeGroup);
         
       
         this.router.post(

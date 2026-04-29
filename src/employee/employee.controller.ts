@@ -61,8 +61,35 @@ export class EmployeeController {
         res.status(result.statusCode).json(result);
     });
 
+    bulkUploadMissing = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        const file = req.file;
+        if (!file) {
+            throw new ApiError(statusCode.BadRequest, "No file uploaded");
+        }
+        const result = await this.employeeService.bulkUploadMissing(file.buffer);
+        res.status(result.statusCode).json(result);
+    });
+
     syncGroups = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
         const result = await this.employeeService.syncGroups();
+        res.status(result.statusCode).json(result);
+    });
+
+    assignGroup = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        const { employeeId, groupId } = req.body;
+        if (!employeeId || !groupId) {
+            throw new ApiError(statusCode.BadRequest, "employeeId and groupId are required");
+        }
+        const result = await this.employeeService.assignGroup(employeeId, Number(groupId));
+        res.status(result.statusCode).json(result);
+    });
+
+    removeGroup = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        const { employeeId } = req.body;
+        if (!employeeId) {
+            throw new ApiError(statusCode.BadRequest, "employeeId is required");
+        }
+        const result = await this.employeeService.removeGroup(employeeId);
         res.status(result.statusCode).json(result);
     });
 }

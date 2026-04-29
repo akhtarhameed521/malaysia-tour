@@ -217,52 +217,54 @@ export class EmployeeService {
         return new ApiResponse(statusCode.OK, null, "Employee deleted successfully");
     }
 
- async bulkUpload(fileBuffer: Buffer): Promise<ApiResponse<any>> {
+    async bulkUpload(fileBuffer: Buffer): Promise<ApiResponse<any>> {
         const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const data = xlsx.utils.sheet_to_json(worksheet);
+        const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
         const DEFAULT_PLAIN_PASSWORD = 'Welcome123';
         let createdCount = 0;
         let updatedCount = 0;
+        let invalidCount = 0;
+        let sheetDuplicateCount = 0;
+        const totalInExcel = data.length;
 
         const groups = await this.groupRepository.find();
+        const seenInSheet = new Set<string>();
 
         for (const row of data as any[]) {
             const mappedData = this.mapExcelRowToEmployee(row);
 
-            if (!mappedData.employeeId && !mappedData.email) continue;
+            // Skip ONLY if both are missing - we need at least one ID to track duplicates
+            if (!mappedData.employeeId && !mappedData.email) {
+                invalidCount++;
+                continue;
+            }
 
-            // Extract plain password before saving (never store it raw)
+            // Check for duplicates within the Excel sheet itself
+            const sheetKey = (mappedData.employeeId || mappedData.email).toLowerCase();
+            if (seenInSheet.has(sheetKey)) {
+                sheetDuplicateCount++;
+                continue;
+            }
+            seenInSheet.add(sheetKey);
+
             const { plainPassword, ...employeeData } = mappedData;
 
-            // Auto-assign group ID if name exists or match via airline
+            // Group assignment logic
             if (!employeeData.group || !employeeData.group.id) {
                 let matchedGroup: { id: string, name: string } | null = null;
-                
-                // 1. Match by name if we have it in the group field
                 if (employeeData.group?.name) {
                     const found = groups.find(g => g.name.toLowerCase().trim() === employeeData.group.name.toLowerCase().trim());
-                    if (found) {
-                        matchedGroup = { id: found.id.toString(), name: found.name };
-                    }
+                    if (found) matchedGroup = { id: found.id.toString(), name: found.name };
                 }
-                
-                // 2. Fallback to airline name
                 if (!matchedGroup && employeeData.airline?.name) {
                     matchedGroup = this.findMatchingGroup(employeeData.airline.name, groups);
                 }
-                
-                if (matchedGroup) {
-                    employeeData.group = matchedGroup;
-                }
+                if (matchedGroup) employeeData.group = matchedGroup;
             }
 
-            const resolvedPassword = await hashPassword(
-                plainPassword ?? DEFAULT_PLAIN_PASSWORD,
-                10
-            );
+            const resolvedPassword = await hashPassword(plainPassword ?? DEFAULT_PLAIN_PASSWORD, 10);
 
             let employee = await this.employeeRepository.createQueryBuilder("employee")
                 .where("employee.employeeId = :employeeId", { employeeId: employeeData.employeeId })
@@ -271,23 +273,156 @@ export class EmployeeService {
 
             if (employee) {
                 Object.assign(employee, employeeData);
-                // Only overwrite password on update if Excel explicitly provided one
-                if (plainPassword) {
-                    employee.password = resolvedPassword;
-                }
+                if (plainPassword) employee.password = resolvedPassword;
                 await this.employeeRepository.save(employee);
                 updatedCount++;
             } else {
                 const newEmployee = this.employeeRepository.create({
                     ...employeeData,
-                    password: resolvedPassword
-                } as any);
+                    password: resolvedPassword,
+                    role: employeeData.role || "Member",
+                    status: StatusEnum.Active
+                });
                 await this.employeeRepository.save(newEmployee);
                 createdCount++;
             }
         }
 
-        return new ApiResponse(statusCode.OK, { createdCount, updatedCount }, "Bulk upload completed successfully");
+        return new ApiResponse(statusCode.OK, { 
+            totalInExcel,
+            createdCount, 
+            updatedCount,
+            sheetDuplicateCount,
+            invalidCount,
+            totalProcessed: createdCount + updatedCount 
+        }, `${createdCount} created, ${updatedCount} updated, ${sheetDuplicateCount} sheet duplicates skipped. Total rows: ${totalInExcel}`);
+    }
+
+    async bulkUploadMissing(fileBuffer: Buffer): Promise<ApiResponse<any>> {
+        const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+        const DEFAULT_PLAIN_PASSWORD = 'Welcome123';
+        let createdCount = 0;
+        let skippedCount = 0;
+        let invalidCount = 0;
+        let sheetDuplicateCount = 0;
+        const totalInExcel = data.length;
+
+        const groups = await this.groupRepository.find();
+        const seenInSheet = new Set<string>();
+
+        for (const row of data as any[]) {
+            const mappedData = this.mapExcelRowToEmployee(row);
+
+            if (!mappedData.employeeId && !mappedData.email) {
+                invalidCount++;
+                continue;
+            }
+
+            // Check for duplicates within the Excel sheet itself
+            const sheetKey = (mappedData.employeeId || mappedData.email).toLowerCase();
+            if (seenInSheet.has(sheetKey)) {
+                sheetDuplicateCount++;
+                continue;
+            }
+            seenInSheet.add(sheetKey);
+
+            const { plainPassword, ...employeeData } = mappedData;
+
+            // Check if user already exists in DB
+            const existing = await this.employeeRepository.createQueryBuilder("employee")
+                .where("employee.employeeId = :employeeId", { employeeId: employeeData.employeeId })
+                .orWhere("LOWER(employee.email) = LOWER(:email)", { email: employeeData.email })
+                .getOne();
+
+            if (existing) {
+                skippedCount++;
+                continue;
+            }
+
+            // Group assignment logic
+            if (!employeeData.group || !employeeData.group.id) {
+                let matchedGroup: { id: string, name: string } | null = null;
+                if (employeeData.group?.name) {
+                    const found = groups.find(g => g.name.toLowerCase().trim() === employeeData.group.name.toLowerCase().trim());
+                    if (found) matchedGroup = { id: found.id.toString(), name: found.name };
+                }
+                if (!matchedGroup && employeeData.airline?.name) {
+                    matchedGroup = this.findMatchingGroup(employeeData.airline.name, groups);
+                }
+                if (matchedGroup) employeeData.group = matchedGroup;
+            }
+
+            const resolvedPassword = await hashPassword(plainPassword ?? DEFAULT_PLAIN_PASSWORD, 10);
+
+            const newEmployee = this.employeeRepository.create({
+                ...employeeData,
+                password: resolvedPassword,
+                role: employeeData.role || "Member",
+                status: StatusEnum.Active
+            });
+            await this.employeeRepository.save(newEmployee);
+            createdCount++;
+        }
+
+        return new ApiResponse(statusCode.OK, { 
+            totalInExcel,
+            createdCount, 
+            skippedCount, 
+            sheetDuplicateCount,
+            invalidCount,
+            totalProcessed: createdCount + skippedCount
+        }, `${createdCount} new created, ${skippedCount} DB matches skipped, ${sheetDuplicateCount} sheet duplicates skipped. Total rows: ${totalInExcel}`);
+    }
+
+    async assignGroup(identifier: string | number, groupId: number): Promise<ApiResponse<EmployeeEntity>> {
+        // Try to find by numeric id first, then by string employeeId
+        let employee: EmployeeEntity | null = null;
+        
+        if (!isNaN(Number(identifier))) {
+            employee = await this.employeeRepository.findOneBy({ id: Number(identifier) });
+        }
+        
+        if (!employee) {
+            employee = await this.employeeRepository.findOneBy({ employeeId: identifier.toString() });
+        }
+
+        if (!employee) {
+            throw new ApiError(statusCode.NotFound, "Employee not found");
+        }
+
+        const group = await this.groupRepository.findOneBy({ id: groupId });
+        if (!group) {
+            throw new ApiError(statusCode.NotFound, "Group not found");
+        }
+
+        employee.group = { id: group.id.toString(), name: group.name };
+        await this.employeeRepository.save(employee);
+
+        return new ApiResponse(statusCode.OK, employee, "Employee assigned to group successfully");
+    }
+
+    async removeGroup(identifier: string | number): Promise<ApiResponse<EmployeeEntity>> {
+        let employee: EmployeeEntity | null = null;
+        
+        if (!isNaN(Number(identifier))) {
+            employee = await this.employeeRepository.findOneBy({ id: Number(identifier) });
+        }
+        
+        if (!employee) {
+            employee = await this.employeeRepository.findOneBy({ employeeId: identifier.toString() });
+        }
+
+        if (!employee) {
+            throw new ApiError(statusCode.NotFound, "Employee not found");
+        }
+
+        employee.group = null;
+        await this.employeeRepository.save(employee);
+
+        return new ApiResponse(statusCode.OK, employee, "Employee removed from group successfully");
     }
 
     private mapExcelRowToEmployee(row: any): any {
