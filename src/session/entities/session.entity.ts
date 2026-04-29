@@ -8,13 +8,13 @@ export class Session extends BaseAppEntity {
   @Column({ type: "varchar", length: 255 })
   sessionTitle: string;
 
-  @Column({ type: "time" })
-  time: string; 
+  @Column({ type: "time", nullable: true })   // ← was non-nullable
+  time: string;
 
-  @Column({ type: "date" })
+  @Column({ type: "date", nullable: true })   // ← was non-nullable
   date: string;
 
-  @Column({ type: "varchar", length: 255 })
+  @Column({ type: "varchar", length: 255, nullable: true })  // ← was non-nullable
   location: string;
 
   @Column({ type: "varchar", length: 255, nullable: true })
@@ -23,7 +23,7 @@ export class Session extends BaseAppEntity {
   @Column({ type: "varchar", length: 255, nullable: true })
   airlineName: string;
 
-  @Column({ type: "varchar", length: 255 })
+  @Column({ type: "varchar", length: 255, nullable: true })  // ← was non-nullable
   track: string;
 
   @ManyToMany(() => GroupEntity, { cascade: true })
