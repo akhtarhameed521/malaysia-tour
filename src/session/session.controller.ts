@@ -24,7 +24,9 @@ export class SessionController {
 
     getAll = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
         const groupId = req.query.groupId ? Number(req.query.groupId) : undefined;
-        const result = await this.sessionService.getAllSessions(groupId);
+        const page = req.query.page ? Number(req.query.page) : undefined;
+        const limit = req.query.limit ? Number(req.query.limit) : undefined;
+        const result = await this.sessionService.getAllSessions(groupId, page, limit);
         res.status(result.statusCode).json(result);
     });
 

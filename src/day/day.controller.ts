@@ -15,7 +15,9 @@ export class DayController {
     });
 
     getAll = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-        const result = await this.dayService.getAllDays();
+        const page = req.query.page ? Number(req.query.page) : undefined;
+        const limit = req.query.limit ? Number(req.query.limit) : undefined;
+        const result = await this.dayService.getAllDays(page, limit);
         res.status(result.statusCode).json(result);
     });
 

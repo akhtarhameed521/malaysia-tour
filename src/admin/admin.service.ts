@@ -63,18 +63,26 @@ export class AdminService {
         return new ApiResponse(statusCode.Created, adminResponse as AdminEntity, "Admin created successfully");
     }
 
-    async getAllAdmins(page: number = 1, limit: number = 10): Promise<ApiResponse<AdminEntity[]>> {
-        const [admins, total] = await this.adminRepository
-            .findAndCount({
-                skip: (page - 1) * limit,
-                take: limit,
-                order: { createdAt: "DESC" }
-            });
+    async getAllAdmins(page?: number, limit?: number): Promise<ApiResponse<AdminEntity[]>> {
+        const findOptions: any = {
+            order: { createdAt: "DESC" }
+        };
 
-        const lastPage = Math.ceil(total / limit);
+        if (page !== undefined && limit !== undefined) {
+            findOptions.skip = (page - 1) * limit;
+            findOptions.take = limit;
+        }
+
+        const [admins, total] = await this.adminRepository.findAndCount(findOptions);
+
         const sanitizedAdmins = admins.map(({ password: _, ...admin }) => admin as AdminEntity);
 
-        return new ApiResponse(statusCode.OK, sanitizedAdmins, "Admins retrieved successfully", page, total, lastPage);
+        if (page !== undefined && limit !== undefined) {
+            const lastPage = Math.ceil(total / limit);
+            return new ApiResponse(statusCode.OK, sanitizedAdmins, "Admins retrieved successfully", page, total, lastPage);
+        } else {
+            return new ApiResponse(statusCode.OK, sanitizedAdmins, "Admins retrieved successfully", undefined, total);
+        }
     }
 
     async getAdminById(id: number): Promise<ApiResponse<AdminEntity>> {

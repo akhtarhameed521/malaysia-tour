@@ -14,11 +14,25 @@ export class DayService {
         return new ApiResponse(statusCode.Created, day, "Day created successfully");
     }
 
-    async getAllDays(): Promise<ApiResponse<Day[]>> {
-        const days = await this.dayRepository.find({
-            relations: ["sessions"]
-        });
-        return new ApiResponse(statusCode.OK, days, "Days retrieved successfully");
+    async getAllDays(page?: number, limit?: number): Promise<ApiResponse<Day[]>> {
+        const findOptions: any = {
+            relations: ["sessions"],
+            order: { id: "ASC" }
+        };
+
+        if (page !== undefined && limit !== undefined) {
+            findOptions.skip = (page - 1) * limit;
+            findOptions.take = limit;
+        }
+
+        const [days, total] = await this.dayRepository.findAndCount(findOptions);
+
+        if (page !== undefined && limit !== undefined) {
+            const lastPage = Math.ceil(total / limit);
+            return new ApiResponse(statusCode.OK, days, "Days retrieved successfully", page, total, lastPage);
+        } else {
+            return new ApiResponse(statusCode.OK, days, "Days retrieved successfully", undefined, total);
+        }
     }
 
     async getDayById(id: number): Promise<ApiResponse<Day>> {

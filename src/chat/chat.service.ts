@@ -171,7 +171,7 @@ export class ChatService {
     /**
      * Retrieves paginated messages for a chat room.
      */
-    async getMessages(chatRoomId: number, userId: number, page: number = 1, limit: number = 50): Promise<ApiResponse<any>> {
+    async getMessages(chatRoomId: number, userId: number, page?: number, limit?: number): Promise<ApiResponse<any>> {
         // Verify room exists
         const room = await this.chatRoomRepository.findOne({
             where: { id: chatRoomId },
@@ -187,15 +187,23 @@ export class ChatService {
             throw new ApiError(statusCode.Forbidden, "You are not a member of this chat room");
         }
 
-        const [messages, total] = await this.chatMessageRepository.findAndCount({
+        const findOptions: any = {
             where: { chatRoomId },
             relations: ["sender"],
             order: { createdAt: "DESC" },
-            skip: (page - 1) * limit,
-            take: limit,
-        });
+        };
 
-        const lastPage = Math.ceil(total / limit);
+        if (page !== undefined && limit !== undefined) {
+            findOptions.skip = (page - 1) * limit;
+            findOptions.take = limit;
+        }
+
+        const [messages, total] = await this.chatMessageRepository.findAndCount(findOptions);
+
+        let lastPage: number | undefined;
+        if (page !== undefined && limit !== undefined) {
+            lastPage = Math.ceil(total / limit);
+        }
 
         // Get all unique user IDs from all readBy arrays
         const allReadByIds = new Set<number>();
@@ -317,16 +325,24 @@ export class ChatService {
     /**
      * Gets all images uploaded in any chat room by any user.
      */
-    async getAllChatImages(page: number = 1, limit: number = 50): Promise<ApiResponse<any>> {
-        const [messages, total] = await this.chatMessageRepository.findAndCount({
+    async getAllChatImages(page?: number, limit?: number): Promise<ApiResponse<any>> {
+        const findOptions: any = {
             where: { messageType: "image" },
             relations: ["sender"],
             order: { createdAt: "DESC" },
-            skip: (page - 1) * limit,
-            take: limit,
-        });
+        };
 
-        const lastPage = Math.ceil(total / limit);
+        if (page !== undefined && limit !== undefined) {
+            findOptions.skip = (page - 1) * limit;
+            findOptions.take = limit;
+        }
+
+        const [messages, total] = await this.chatMessageRepository.findAndCount(findOptions);
+
+        let lastPage: number | undefined;
+        if (page !== undefined && limit !== undefined) {
+            lastPage = Math.ceil(total / limit);
+        }
 
         const images = messages.map(msg => ({
             id: msg.id,

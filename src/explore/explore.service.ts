@@ -90,7 +90,7 @@ export class ExploreService {
         return new ApiResponse(statusCode.Created, explore, "Explore entry created successfully");
     }
 
-    async getAllExplore(type?: ExploreType): Promise<ApiResponse<Explore[]>> {
+    async getAllExplore(type?: ExploreType, page?: number, limit?: number): Promise<ApiResponse<Explore[]>> {
         const query: any = {};
         let select: any = undefined;
 
@@ -107,13 +107,25 @@ export class ExploreService {
             }
         }
 
-        const entries = await this.exploreRepository.find({
+        const findOptions: any = {
             where: query,
             select: select,
             order: { createdAt: "DESC" }
-        });
+        };
 
-        return new ApiResponse(statusCode.OK, entries, "Explore entries retrieved successfully");
+        if (page !== undefined && limit !== undefined) {
+            findOptions.skip = (page - 1) * limit;
+            findOptions.take = limit;
+        }
+
+        const [entries, total] = await this.exploreRepository.findAndCount(findOptions);
+
+        if (page !== undefined && limit !== undefined) {
+            const lastPage = Math.ceil(total / limit);
+            return new ApiResponse(statusCode.OK, entries, "Explore entries retrieved successfully", page, total, lastPage);
+        } else {
+            return new ApiResponse(statusCode.OK, entries, "Explore entries retrieved successfully", undefined, total);
+        }
     }
 
     async getExploreById(id: number): Promise<ApiResponse<Explore>> {

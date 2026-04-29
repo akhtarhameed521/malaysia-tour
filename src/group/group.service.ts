@@ -14,9 +14,24 @@ export class GroupService {
         return new ApiResponse(statusCode.Created, group, "Group created successfully");
     }
 
-    async getAllGroups(): Promise<ApiResponse<GroupEntity[]>> {
-        const groups = await this.groupRepository.find();
-        return new ApiResponse(statusCode.OK, groups, "Groups retrieved successfully");
+    async getAllGroups(page?: number, limit?: number): Promise<ApiResponse<GroupEntity[]>> {
+        const findOptions: any = {
+            order: { id: "ASC" }
+        };
+
+        if (page !== undefined && limit !== undefined) {
+            findOptions.skip = (page - 1) * limit;
+            findOptions.take = limit;
+        }
+
+        const [groups, total] = await this.groupRepository.findAndCount(findOptions);
+
+        if (page !== undefined && limit !== undefined) {
+            const lastPage = Math.ceil(total / limit);
+            return new ApiResponse(statusCode.OK, groups, "Groups retrieved successfully", page, total, lastPage);
+        } else {
+            return new ApiResponse(statusCode.OK, groups, "Groups retrieved successfully", undefined, total);
+        }
     }
 
     async getGroupById(id: number): Promise<ApiResponse<GroupEntity>> {

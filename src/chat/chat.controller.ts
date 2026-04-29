@@ -48,8 +48,8 @@ export class ChatController {
     getMessages = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
         const chatRoomId = Number(req.params.chatRoomId);
         const userId = req.user!.id;
-        const page = Number(req.query.page) || 1;
-        const limit = Number(req.query.limit) || 50;
+        const page = req.query.page ? Number(req.query.page) : undefined;
+        const limit = req.query.limit ? Number(req.query.limit) : undefined;
         const result = await this.chatService.getMessages(chatRoomId, userId, page, limit);
         res.status(result.statusCode).json(result);
     });
@@ -122,8 +122,8 @@ export class ChatController {
      * Get all images uploaded in any chat room
      */
     getAllImages = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-        const page = Number(req.query.page) || 1;
-        const limit = Number(req.query.limit) || 50;
+        const page = req.query.page ? Number(req.query.page) : undefined;
+        const limit = req.query.limit ? Number(req.query.limit) : undefined;
         const result = await this.chatService.getAllChatImages(page, limit);
         res.status(result.statusCode).json(result);
     });
