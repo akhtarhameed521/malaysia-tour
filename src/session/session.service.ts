@@ -112,7 +112,7 @@ export class SessionService {
         return new ApiResponse(statusCode.Created, session, "Session created successfully");
     }
 
-    async getAllSessions(groupId?: number): Promise<ApiResponse<Session[]>> {
+    async getAllSessions(groupId?: number, page?: number, limit?: number): Promise<ApiResponse<Session[]>> {
         const query: any = {
             relations: ["groups"],
             order: { date: "ASC", time: "ASC" }
@@ -124,8 +124,19 @@ export class SessionService {
             };
         }
 
-        const sessions = await this.sessionRepository.find(query);
-        return new ApiResponse(statusCode.OK, sessions, "Sessions retrieved successfully");
+        if (page !== undefined && limit !== undefined) {
+            query.skip = (page - 1) * limit;
+            query.take = limit;
+        }
+
+        const [sessions, total] = await this.sessionRepository.findAndCount(query);
+
+        if (page !== undefined && limit !== undefined) {
+            const lastPage = Math.ceil(total / limit);
+            return new ApiResponse(statusCode.OK, sessions, "Sessions retrieved successfully", page, total, lastPage);
+        } else {
+            return new ApiResponse(statusCode.OK, sessions, "Sessions retrieved successfully", undefined, total);
+        }
     }
 
     async getSessionById(id: number): Promise<ApiResponse<Session>> {

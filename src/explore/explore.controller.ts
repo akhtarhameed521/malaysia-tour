@@ -18,7 +18,9 @@ export class ExploreController {
 
     getAll = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
         const type = req.query.type as ExploreType;
-        const result = await this.exploreService.getAllExplore(type);
+        const page = req.query.page ? Number(req.query.page) : undefined;
+        const limit = req.query.limit ? Number(req.query.limit) : undefined;
+        const result = await this.exploreService.getAllExplore(type, page, limit);
         res.status(result.statusCode).json(result);
     });
 

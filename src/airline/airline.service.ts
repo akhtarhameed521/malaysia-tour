@@ -17,9 +17,24 @@ export class AirlineService {
         return new ApiResponse(statusCode.Created, airline, "Airline created successfully");
     }
 
-    async getAllAirlines(): Promise<ApiResponse<Airline[]>> {
-        const airlines = await this.airlineRepository.find();
-        return new ApiResponse(statusCode.OK, airlines, "Airlines retrieved successfully");
+    async getAllAirlines(page?: number, limit?: number): Promise<ApiResponse<Airline[]>> {
+        const findOptions: any = {
+            order: { id: "ASC" }
+        };
+
+        if (page !== undefined && limit !== undefined) {
+            findOptions.skip = (page - 1) * limit;
+            findOptions.take = limit;
+        }
+
+        const [airlines, total] = await this.airlineRepository.findAndCount(findOptions);
+
+        if (page !== undefined && limit !== undefined) {
+            const lastPage = Math.ceil(total / limit);
+            return new ApiResponse(statusCode.OK, airlines, "Airlines retrieved successfully", page, total, lastPage);
+        } else {
+            return new ApiResponse(statusCode.OK, airlines, "Airlines retrieved successfully", undefined, total);
+        }
     }
 
     async getAirlineById(id: number): Promise<ApiResponse<Airline>> {
@@ -50,9 +65,24 @@ export class AirlineService {
         return new ApiResponse(statusCode.Created, returnAirline, "Return Airline created successfully");
     }
 
-    async getAllReturnAirlines(): Promise<ApiResponse<ReturnAirline[]>> {
-        const returnAirlines = await this.returnAirlineRepository.find();
-        return new ApiResponse(statusCode.OK, returnAirlines, "Return Airlines retrieved successfully");
+    async getAllReturnAirlines(page?: number, limit?: number): Promise<ApiResponse<ReturnAirline[]>> {
+        const findOptions: any = {
+            order: { id: "ASC" }
+        };
+
+        if (page !== undefined && limit !== undefined) {
+            findOptions.skip = (page - 1) * limit;
+            findOptions.take = limit;
+        }
+
+        const [returnAirlines, total] = await this.returnAirlineRepository.findAndCount(findOptions);
+
+        if (page !== undefined && limit !== undefined) {
+            const lastPage = Math.ceil(total / limit);
+            return new ApiResponse(statusCode.OK, returnAirlines, "Return Airlines retrieved successfully", page, total, lastPage);
+        } else {
+            return new ApiResponse(statusCode.OK, returnAirlines, "Return Airlines retrieved successfully", undefined, total);
+        }
     }
 
     async getReturnAirlineById(id: number): Promise<ApiResponse<ReturnAirline>> {

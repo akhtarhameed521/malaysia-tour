@@ -16,7 +16,9 @@ export class AirlineController {
     });
 
     getAllAirlines = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-        const result = await this.airlineService.getAllAirlines();
+        const page = req.query.page ? Number(req.query.page) : undefined;
+        const limit = req.query.limit ? Number(req.query.limit) : undefined;
+        const result = await this.airlineService.getAllAirlines(page, limit);
         res.status(result.statusCode).json(result);
     });
 
@@ -42,7 +44,9 @@ export class AirlineController {
     });
 
     getAllReturnAirlines = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-        const result = await this.airlineService.getAllReturnAirlines();
+        const page = req.query.page ? Number(req.query.page) : undefined;
+        const limit = req.query.limit ? Number(req.query.limit) : undefined;
+        const result = await this.airlineService.getAllReturnAirlines(page, limit);
         res.status(result.statusCode).json(result);
     });
 

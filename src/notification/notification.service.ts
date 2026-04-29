@@ -74,14 +74,17 @@ export class NotificationService {
         }
     }
 
-    async getAllNotifications(page: number = 1, limit: number = 20, employeeId?: number): Promise<ApiResponse<Notification[]>> {
+    async getAllNotifications(page?: number, limit?: number, employeeId?: number): Promise<ApiResponse<Notification[]>> {
         const query: any = {
             where: { status: Not(StatusEnum.Deactivate) },
             order: { order: "ASC", createdAt: "DESC" },
             relations: ["employee"],
-            skip: (page - 1) * limit,
-            take: limit,
         };
+
+        if (page !== undefined && limit !== undefined) {
+            query.skip = (page - 1) * limit;
+            query.take = limit;
+        }
 
         if (employeeId) {
             // Find notifications sent to this specific employee OR sent to everyone (null employee)
@@ -93,8 +96,12 @@ export class NotificationService {
 
         const [notifications, total] = await this.notificationRepository.findAndCount(query);
 
-        const lastPage = Math.ceil(total / limit);
-        return new ApiResponse(statusCode.OK, notifications, "Notifications retrieved successfully", page, total, lastPage);
+        if (page !== undefined && limit !== undefined) {
+            const lastPage = Math.ceil(total / limit);
+            return new ApiResponse(statusCode.OK, notifications, "Notifications retrieved successfully", page, total, lastPage);
+        } else {
+            return new ApiResponse(statusCode.OK, notifications, "Notifications retrieved successfully", undefined, total);
+        }
     }
 
     async getNotificationById(id: number): Promise<ApiResponse<Notification>> {

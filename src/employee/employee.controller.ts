@@ -12,8 +12,8 @@ export class EmployeeController {
     }
 
     getAllEmployees = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-        const page = Number(req.query.page) || 1;
-        const limit = Number(req.query.limit) || 10;
+        const page = req.query.page ? Number(req.query.page) : undefined;
+        const limit = req.query.limit ? Number(req.query.limit) : undefined;
         const groupId = req.query.groupId as string;
         const result = await this.employeeService.getAllEmployees(page, limit, groupId);
         res.status(result.statusCode).json(result);

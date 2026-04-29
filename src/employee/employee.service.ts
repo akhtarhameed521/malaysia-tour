@@ -50,7 +50,7 @@ export class EmployeeService {
         return null;
     }
 
-    async getAllEmployees(page: number = 1, limit: number = 10, groupId?: string): Promise<ApiResponse<EmployeeEntity[]>> {
+    async getAllEmployees(page?: number, limit?: number, groupId?: string): Promise<ApiResponse<EmployeeEntity[]>> {
         const whereCondition: any = {
             status: Not(StatusEnum.Deactivate)
         };
@@ -59,15 +59,24 @@ export class EmployeeService {
             whereCondition.group = Raw((alias) => `${alias} ->> 'id' = :groupId`, { groupId });
         }
 
-        const [employees, total] = await this.employeeRepository.findAndCount({
+        const findOptions: any = {
             where: whereCondition,
-            order: { id: "DESC" },
-            skip: (page - 1) * limit,
-            take: limit
-        });
+            order: { id: "DESC" }
+        };
 
-        const lastPage = Math.ceil(total / limit);
-        return new ApiResponse(statusCode.OK, employees, "Employees retrieved successfully", page, total, lastPage);
+        if (page !== undefined && limit !== undefined) {
+            findOptions.skip = (page - 1) * limit;
+            findOptions.take = limit;
+        }
+
+        const [employees, total] = await this.employeeRepository.findAndCount(findOptions);
+
+        if (page !== undefined && limit !== undefined) {
+            const lastPage = Math.ceil(total / limit);
+            return new ApiResponse(statusCode.OK, employees, "Employees retrieved successfully", page, total, lastPage);
+        } else {
+            return new ApiResponse(statusCode.OK, employees, "Employees retrieved successfully", undefined, total);
+        }
     }
 
     async getEmployeeByEmployeeId(employeeId: string): Promise<ApiResponse<EmployeeEntity>> {
@@ -228,9 +237,23 @@ export class EmployeeService {
             // Extract plain password before saving (never store it raw)
             const { plainPassword, ...employeeData } = mappedData;
 
-            // Auto-assign group if not present but airline exists
-            if ((!employeeData.group || !employeeData.group.id) && employeeData.airline?.name) {
-                const matchedGroup = this.findMatchingGroup(employeeData.airline.name, groups);
+            // Auto-assign group ID if name exists or match via airline
+            if (!employeeData.group || !employeeData.group.id) {
+                let matchedGroup: { id: string, name: string } | null = null;
+                
+                // 1. Match by name if we have it in the group field
+                if (employeeData.group?.name) {
+                    const found = groups.find(g => g.name.toLowerCase().trim() === employeeData.group.name.toLowerCase().trim());
+                    if (found) {
+                        matchedGroup = { id: found.id.toString(), name: found.name };
+                    }
+                }
+                
+                // 2. Fallback to airline name
+                if (!matchedGroup && employeeData.airline?.name) {
+                    matchedGroup = this.findMatchingGroup(employeeData.airline.name, groups);
+                }
+                
                 if (matchedGroup) {
                     employeeData.group = matchedGroup;
                 }
@@ -386,13 +409,27 @@ export class EmployeeService {
         let updatedCount = 0;
 
         for (const employee of employees) {
-            if ((!employee.group || !employee.group.id) && employee.airline?.name) {
-                const matchedGroup = this.findMatchingGroup(employee.airline.name, groups);
-                if (matchedGroup) {
-                    employee.group = matchedGroup;
-                    await this.employeeRepository.save(employee);
-                    updatedCount++;
+            let matchedGroup: { id: string, name: string } | null = null;
+
+            // 1. Try to match by existing group name in employee record
+            const currentGroupName = employee.group?.name;
+            if (currentGroupName) {
+                const found = groups.find(g => g.name.toLowerCase().trim() === currentGroupName.toLowerCase().trim());
+                if (found) {
+                    matchedGroup = { id: found.id.toString(), name: found.name };
                 }
+            }
+
+            // 2. If no match by name yet, fall back to airline matching (only if ID is still missing)
+            if (!matchedGroup && (!employee.group || !employee.group.id) && employee.airline?.name) {
+                matchedGroup = this.findMatchingGroup(employee.airline.name, groups);
+            }
+
+            // 3. Update if we found a match and it's either a new assignment or providing a missing ID
+            if (matchedGroup && (!employee.group || employee.group.id !== matchedGroup.id)) {
+                employee.group = matchedGroup;
+                await this.employeeRepository.save(employee);
+                updatedCount++;
             }
         }
 
