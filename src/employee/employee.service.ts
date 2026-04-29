@@ -208,13 +208,13 @@ export class EmployeeService {
         return new ApiResponse(statusCode.OK, null, "Employee deleted successfully");
     }
 
-    async bulkUpload(fileBuffer: Buffer): Promise<ApiResponse<any>> {
+ async bulkUpload(fileBuffer: Buffer): Promise<ApiResponse<any>> {
         const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const data = xlsx.utils.sheet_to_json(worksheet);
 
-        const defaultPassword = await hashPassword('Welcome123', 10);
+        const DEFAULT_PLAIN_PASSWORD = 'Welcome123';
         let createdCount = 0;
         let updatedCount = 0;
 
@@ -222,30 +222,42 @@ export class EmployeeService {
 
         for (const row of data as any[]) {
             const mappedData = this.mapExcelRowToEmployee(row);
-            
+
             if (!mappedData.employeeId && !mappedData.email) continue;
 
+            // Extract plain password before saving (never store it raw)
+            const { plainPassword, ...employeeData } = mappedData;
+
             // Auto-assign group if not present but airline exists
-            if ((!mappedData.group || !mappedData.group.id) && mappedData.airline?.name) {
-                const matchedGroup = this.findMatchingGroup(mappedData.airline.name, groups);
+            if ((!employeeData.group || !employeeData.group.id) && employeeData.airline?.name) {
+                const matchedGroup = this.findMatchingGroup(employeeData.airline.name, groups);
                 if (matchedGroup) {
-                    mappedData.group = matchedGroup;
+                    employeeData.group = matchedGroup;
                 }
             }
 
+            const resolvedPassword = await hashPassword(
+                plainPassword ?? DEFAULT_PLAIN_PASSWORD,
+                10
+            );
+
             let employee = await this.employeeRepository.createQueryBuilder("employee")
-                .where("employee.employeeId = :employeeId", { employeeId: mappedData.employeeId })
-                .orWhere("LOWER(employee.email) = LOWER(:email)", { email: mappedData.email })
+                .where("employee.employeeId = :employeeId", { employeeId: employeeData.employeeId })
+                .orWhere("LOWER(employee.email) = LOWER(:email)", { email: employeeData.email })
                 .getOne();
 
             if (employee) {
-                Object.assign(employee, mappedData);
+                Object.assign(employee, employeeData);
+                // Only overwrite password on update if Excel explicitly provided one
+                if (plainPassword) {
+                    employee.password = resolvedPassword;
+                }
                 await this.employeeRepository.save(employee);
                 updatedCount++;
             } else {
                 const newEmployee = this.employeeRepository.create({
-                    ...mappedData,
-                    password: defaultPassword
+                    ...employeeData,
+                    password: resolvedPassword
                 } as any);
                 await this.employeeRepository.save(newEmployee);
                 createdCount++;
@@ -255,129 +267,115 @@ export class EmployeeService {
         return new ApiResponse(statusCode.OK, { createdCount, updatedCount }, "Bulk upload completed successfully");
     }
 
-   private mapExcelRowToEmployee(row: any): any {
-    const mapped: any = {
-        group: {},
-        airline: {},
-        returnAirline: {},
-        room: {}
-    };
- 
-    // ── Normalise every key: lowercase + trim ──────────────────────────
-    const normRow: { [key: string]: any } = {};
-    for (const [key, value] of Object.entries(row)) {
-        normRow[key.toLowerCase().trim()] = value;
+    private mapExcelRowToEmployee(row: any): any {
+        const mapped: any = {
+            group: {},
+            airline: {},
+            returnAirline: {},
+            room: {}
+        };
+
+        // Normalise every key: lowercase + trim
+        const normRow: { [key: string]: any } = {};
+        for (const [key, value] of Object.entries(row)) {
+            normRow[key.toLowerCase().trim()] = value;
+        }
+
+        // Helper: safe string (skip undefined / null / NaN)
+        const str = (v: any): string | null => {
+            if (v === undefined || v === null) return null;
+            const s = String(v).trim();
+            return s === '' || s.toLowerCase() === 'nan' ? null : s;
+        };
+
+        // ── FLAT FIELDS ───────────────────────────────────────────────────
+
+        // IDs
+        const globalId = str(normRow['globalid']);
+        mapped.globalId   = globalId;
+        mapped.employeeId = str(normRow['employeeid']) ?? globalId; // fallback to globalId
+        mapped.localId    = str(normRow['localid']);
+
+        // Name / contact
+        mapped.fullName = str(normRow['fullname']);
+        mapped.email    = str(normRow['email'])?.toLowerCase();
+        mapped.phone    = str(normRow['phone']);
+
+        // Job / HR fields
+        mapped.jobTitle         = str(normRow['jobtitle']);
+        mapped.role             = str(normRow['role']);
+        mapped.function         = str(normRow['function']);
+        mapped.lineManager      = str(normRow['linemanager']);
+        mapped.fastTrack        = str(normRow['fasttrack']);
+        mapped.advancePack      = str(normRow['advancepack']);
+        mapped.regionDepartment = str(normRow['regiondepartment']);
+        mapped.flightStation    = str(normRow['flightstation']);
+        mapped.type             = str(normRow['type']);
+
+        // Personal
+        mapped.gender             = str(normRow['gender']);
+        mapped.passportNumber     = str(normRow['passportnumber']);
+        mapped.passportIssDate    = str(normRow['passportissdate']);
+        mapped.passportExpiryDate = str(normRow['passportexpirydate']);
+        mapped.nicNumber          = str(normRow['nicnumber']);
+        mapped.country            = str(normRow['country']);
+        mapped.arrivalTimeKUL     = str(normRow['arrivaltimekul']);
+
+        // Hotel
+        mapped.hotel = str(normRow['hotel']);
+
+        // Password — plain text from Excel; hashed in bulkUpload, never stored raw
+        mapped.plainPassword = str(normRow['password']);
+
+        // ── GROUP (jsonb) ─────────────────────────────────────────────────
+        // Column header is: "groupId (Select from Group Tab)"
+        const groupRaw = str(
+            normRow['groupid (select from group tab)'] ??
+            normRow['groupid'] ??
+            normRow['group id']
+        );
+        if (groupRaw) mapped.group.name = groupRaw; // stored as name; ID resolved via findMatchingGroup
+
+        // ── AIRLINE (jsonb) ───────────────────────────────────────────────
+        const airlineName    = str(normRow['airlinename']);
+        const airlineDetails = str(normRow['airlinedetails']);
+        const depCity        = str(normRow['airlinedeparturecity']);
+        const depDate        = str(normRow['airlinedeparturedate']);
+        const depTime        = str(normRow['airlinedeparturetime']);
+
+        if (airlineName)    mapped.airline.name          = airlineName;
+        if (airlineDetails) mapped.airline.details        = airlineDetails;
+        if (depCity)        mapped.airline.departureCity  = depCity;
+        if (depDate)        mapped.airline.departureDate  = depDate;
+        if (depTime)        mapped.airline.departureTime  = depTime;
+
+        // ── RETURN AIRLINE (jsonb) ────────────────────────────────────────
+        const retName    = str(normRow['returnairlinename']);
+        const retDetails = str(normRow['returnairlinedetails']);
+        const retCity    = str(normRow['returnairlinedeparturecity']);
+        const retDate    = str(normRow['returnairlinedeparturedate']);
+        const retTime    = str(normRow['returnairlinedeparturetime']);
+
+        if (retName)    mapped.returnAirline.name          = retName;
+        if (retDetails) mapped.returnAirline.details        = retDetails;
+        if (retCity)    mapped.returnAirline.departureCity  = retCity;
+        if (retDate)    mapped.returnAirline.departureDate  = retDate;
+        if (retTime)    mapped.returnAirline.departureTime  = retTime;
+
+        // ── ROOM (jsonb) ──────────────────────────────────────────────────
+        const roomType   = str(normRow['roomtype']);
+        const roomNumber = str(normRow['roomnumber']);
+        if (roomType)   mapped.room.type   = roomType;
+        if (roomNumber) mapped.room.number = roomNumber;
+
+        // ── CLEAN UP empty nested objects → null ──────────────────────────
+        if (Object.keys(mapped.group).length === 0)         mapped.group         = null;
+        if (Object.keys(mapped.airline).length === 0)       mapped.airline       = null;
+        if (Object.keys(mapped.returnAirline).length === 0) mapped.returnAirline = null;
+        if (Object.keys(mapped.room).length === 0)          mapped.room          = null;
+
+        return mapped;
     }
- 
-    // ── Helper: safe string (skip undefined / null / NaN) ─────────────
-    const str = (v: any): string | null => {
-        if (v === undefined || v === null) return null;
-        const s = String(v).trim();
-        return s === '' || s.toLowerCase() === 'nan' ? null : s;
-    };
- 
-    // ── FLAT FIELDS ───────────────────────────────────────────────────
-    // Type  (4th-7th, Advance 1, Advance 2, Others …)
-    mapped.type = str(normRow['type']);
- 
-    // IDs
-    const globalId = str(normRow['global id']);
-    mapped.globalId   = globalId;
-    mapped.employeeId = globalId;                       // sync
-    mapped.localId    = str(normRow['local id']);
- 
-    // Name
-    const fullName  = str(normRow['name']);
-    const firstName = str(normRow['first name'] ?? normRow['given name']);
-    const lastName  = str(normRow['last name']  ?? normRow['surname']);
-    mapped.fullName = fullName ?? (firstName || lastName
-        ? `${firstName ?? ''} ${lastName ?? ''}`.trim()
-        : null);
- 
-    // Contact
-    mapped.email  = str(normRow['email'])?.toLowerCase();
-    mapped.phone  = str(normRow['cell #'] ?? normRow['phone no'] ?? normRow['phone'] ?? normRow['mobile'] ?? normRow['contact']);
- 
-    // Job / HR fields
-    mapped.jobTitle          = str(normRow['job title']);
-    mapped.role              = str(normRow['role']);
-    mapped.function          = str(normRow['function']);
-    mapped.lineManager       = str(normRow['line manager']);
-    mapped.fastTrack         = str(normRow['fast track'] ?? normRow['fast_track']);
-    mapped.advancePack       = str(normRow['advance pack']);
-    mapped.regionDepartment  = str(normRow['region / department'] ?? normRow['region/department'] ?? normRow['region department']);
-    mapped.flightStation     = str(normRow['flight station']);
- 
-    // Personal
-    mapped.gender              = str(normRow['gender']);
-    mapped.passportNumber      = str(normRow['passport #'] ?? normRow['passport no']);
-    mapped.passportIssDate     = str(normRow['passport date issue'] ?? normRow['passport date iss'] ?? normRow['passport iss date']);
-    mapped.passportExpiryDate  = str(normRow['passport expiry date']);
-    mapped.nicNumber           = str(normRow['nic #'] ?? normRow['nic no']);
-    mapped.country             = str(normRow['country']);
- 
-    // Return-flight date flags
-    mapped.returnFlight7thMay  = str(normRow['return flight 7th may']);
-    mapped.returnFlight8thMay  = str(normRow['return flight 8th may']);
-    mapped.returnFlight9thMay  = str(normRow['return flight 9th may']);
-    mapped.returnFlight10thMay = str(normRow['return flight 10th may']);
- 
-    // Hotel
-    mapped.hotel = str(normRow['hotel']);
- 
-    // Arrival time
-    mapped.arrivalTimeKUL = str(normRow['arrival time at kul']);
- 
-    // ── GROUP (jsonb) ─────────────────────────────────────────────────
-    const groupId   = str(normRow['groupid'] ?? normRow['group id'] ?? normRow['group_id']);
-    const groupName = str(normRow['group'] ?? normRow['group name']);
-    if (groupId)   mapped.group.id   = groupId;
-    if (groupName) mapped.group.name = groupName;
- 
-    // ── AIRLINE (jsonb) ── departure / outbound ────────────────────────
-    // Excel columns: Airline | Air Line Detail | Departure Date | Departure City | Departure Time
-    const airlineName    = str(normRow['airline']);
-    const airlineDetails = str(normRow['air line detail'] ?? normRow['air line details'] ?? normRow['airline detail']);
-    const depDate        = str(normRow['departure date']);
-    const depCity        = str(normRow['departure city']);
-    const depTime        = str(normRow['departure time']);
- 
-    if (airlineName)    mapped.airline.name          = airlineName;
-    if (airlineDetails) mapped.airline.details        = airlineDetails;
-    if (depDate)        mapped.airline.departureDate  = depDate;
-    if (depCity)        mapped.airline.departureCity  = depCity;
-    if (depTime)        mapped.airline.departureTime  = depTime;
- 
-    // ── RETURN AIRLINE (jsonb) ── xlsx renames duplicate cols with .1 ──
-    // Excel columns: Airline.1 | Return flight- Air line | Departure date | Derparture time | Departure City.1
-    const retAirlineName    = str(normRow['airline.1'] ?? normRow['return airline'] ?? normRow['return air line']);
-    const retAirlineDetails = str(normRow['return flight- air line'] ?? normRow['return flight- airline'] ?? normRow['return flight-air line'] ?? normRow['return airline details']);
-    const retDepDate        = str(normRow['departure date.1'] ?? normRow['return departure date']);  // sometimes pandas suffixes with .1
-    // NOTE: xlsx lib (js) keeps original name; pandas renames. Both covered:
-    const retDepDateAlt     = str(normRow['departure date'] !== depDate ? normRow['departure date'] : null);
-    const retDepTime        = str(normRow['derparture time'] ?? normRow['departure time.1'] ?? normRow['return departure time']);
-    const retDepCity        = str(normRow['departure city.1'] ?? normRow['return departure city']);
- 
-    if (retAirlineName)    mapped.returnAirline.name          = retAirlineName;
-    if (retAirlineDetails) mapped.returnAirline.details        = retAirlineDetails;
-    if (retDepDate || retDepDateAlt) mapped.returnAirline.departureDate = retDepDate ?? retDepDateAlt;
-    if (retDepTime)        mapped.returnAirline.departureTime  = retDepTime;
-    if (retDepCity)        mapped.returnAirline.departureCity  = retDepCity;
- 
-    // ── ROOM (jsonb) ──────────────────────────────────────────────────
-    const roomType   = str(normRow['room type']);
-    const roomNumber = str(normRow['room number'] ?? normRow['room']);
-    if (roomType)   mapped.room.type   = roomType;
-    if (roomNumber) mapped.room.number = roomNumber;
- 
-    // ── CLEAN UP empty nested objects → null ──────────────────────────
-    if (Object.keys(mapped.group).length === 0)         mapped.group         = null;
-    if (Object.keys(mapped.airline).length === 0)       mapped.airline       = null;
-    if (Object.keys(mapped.returnAirline).length === 0) mapped.returnAirline = null;
-    if (Object.keys(mapped.room).length === 0)          mapped.room          = null;
- 
-    return mapped;
-}
 
     async syncGroups(): Promise<ApiResponse<any>> {
         const employees = await this.employeeRepository.find({
