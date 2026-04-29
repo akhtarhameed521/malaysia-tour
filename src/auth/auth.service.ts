@@ -34,7 +34,7 @@ export class AuthService {
             .getOne();
 
         if (!employee) {
-            throw new ApiError(statusCode.NotFound, "Employee not found with this email");
+            throw new ApiError(statusCode.UnAuthorized, "Invalid credentials");
         }
 
         if (!employee.password) {
@@ -44,7 +44,7 @@ export class AuthService {
         const isPasswordValid = await bcrypt.compare(password, employee.password);
 
         if (!isPasswordValid) {
-            throw new ApiError(statusCode.UnAuthorized, "Invalid password");
+            throw new ApiError(statusCode.UnAuthorized, "Invalid credentials");
         }
 
         // Update fcmToken if provided
