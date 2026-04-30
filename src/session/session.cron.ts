@@ -107,6 +107,74 @@ export const startSessionCronJobs = () => {
                     }
                 }
             }
+            // --- Airline Departure Reminder (6 hours before) ---
+            const airlineNow = new Date(new Date().toLocaleString("en-US", { timeZone: targetTimeZone }));
+            airlineNow.setHours(airlineNow.getHours() + 6);
+            
+            const aYear = airlineNow.getFullYear();
+            const aMonth = String(airlineNow.getMonth() + 1).padStart(2, "0");
+            const aDay = String(airlineNow.getDate()).padStart(2, "0");
+            const aHours = String(airlineNow.getHours()).padStart(2, "0");
+            const aMinutes = String(airlineNow.getMinutes()).padStart(2, "0");
+
+            const aDateStr = `${aYear}-${aMonth}-${aDay}`;
+            const aTimeStr = `${aHours}:${aMinutes}`;
+
+            // 1. Check Departure Airline
+            const departureEmployees = await employeeRepository.find({
+                where: {
+                    airline: Raw((alias) => `(${alias} ->> 'departureDate') = :date AND (${alias} ->> 'departureTime') LIKE :time`, { 
+                        date: aDateStr, 
+                        time: `${aTimeStr}%` 
+                    })
+                }
+            });
+
+            // 2. Check Return Airline
+            const returnEmployees = await employeeRepository.find({
+                where: {
+                    returnAirline: Raw((alias) => `(${alias} ->> 'departureDate') = :date AND (${alias} ->> 'departureTime') LIKE :time`, { 
+                        date: aDateStr, 
+                        time: `${aTimeStr}%` 
+                    })
+                }
+            });
+
+            const allAirlineEmployees = [...departureEmployees, ...returnEmployees];
+
+            if (allAirlineEmployees.length > 0) {
+                console.log(`[Airline Cron] Found ${allAirlineEmployees.length} employees for flight departure reminders.`);
+                
+                for (const emp of allAirlineEmployees) {
+                    const isReturn = returnEmployees.some(re => re.id === emp.id);
+                    const airlineInfo = isReturn ? emp.returnAirline : emp.airline;
+                    
+                    const title = `Flight Departure Reminder`;
+                    const message = `Your ${isReturn ? "return " : ""}flight ${airlineInfo.name} is departing in 6 hours at ${airlineInfo.departureTime}. Please ensure you are ready.`;
+
+                    // Save notification to DB
+                    await notificationRepository.save(notificationRepository.create({
+                        title,
+                        message,
+                        type: "airline_reminder",
+                        employee: emp
+                    }));
+
+                    // Send Push
+                    if (emp.fcmToken) {
+                        try {
+                            await admin.messaging().send({
+                                token: emp.fcmToken,
+                                notification: { title, body: message },
+                                data: { click_action: "FLUTTER_NOTIFICATION_CLICK", type: "airline_reminder" }
+                            });
+                            console.log(`[Airline Cron] Sent departure reminder to employee: ${emp.fullName || emp.id}`);
+                        } catch (error) {
+                            console.error(`[Airline Cron] Error sending push to employee ${emp.id}:`, error);
+                        }
+                    }
+                }
+            }
         } catch (error) {
             console.error("Error in session cron job:", error);
         }
