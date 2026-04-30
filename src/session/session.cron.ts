@@ -57,16 +57,6 @@ export const startSessionCronJobs = () => {
                     }
                 }
 
-                // 2. Get employees by airline
-                if (session.airlineName) {
-                    const employees = await employeeRepository.find({
-                        where: {
-                            airline: Raw((alias) => `LOWER(${alias} ->> 'name') LIKE LOWER(:airlineName)`, { airlineName: `%${session.airlineName}%` })
-                        }
-                    });
-                    targetEmployees.push(...employees);
-                }
-
                 // Remove duplicates by employee ID
                 const uniqueEmployeesMap = new Map<number, EmployeeEntity>();
                 for (const emp of targetEmployees) {
