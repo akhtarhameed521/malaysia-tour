@@ -5,7 +5,7 @@ import { ApiResponse } from "../common/helper/api-success.helper";
 import { ApiError } from "../common/helper/api-error.helper";
 import { statusCode } from "../common/messages/status-code.messages";
 import { StatusEnum } from "../types";
-import { Not } from "typeorm";
+import { Not, Brackets } from "typeorm";
 import admin from "../common/config/firebase-keys.config";
 import { EmployeeEntity } from "../entities/employee.entity";
 
@@ -75,26 +75,26 @@ export class NotificationService {
     }
 
     async getAllNotifications(page?: number, limit?: number, employeeId?: number): Promise<ApiResponse<Notification[]>> {
-        const query: any = {
-            where: { status: Not(StatusEnum.Deactivate) },
-            order: { order: "ASC", createdAt: "DESC" },
-            relations: ["employee"],
-        };
-
-        if (page !== undefined && limit !== undefined) {
-            query.skip = (page - 1) * limit;
-            query.take = limit;
-        }
+        const queryBuilder = this.notificationRepository.createQueryBuilder("notification")
+            .leftJoinAndSelect("notification.employee", "employee")
+            .where("notification.status != :status", { status: StatusEnum.Deactivate });
 
         if (employeeId) {
-            // Find notifications sent to this specific employee OR sent to everyone (null employee)
-            query.where = [
-                { employee: { id: employeeId }, status: Not(StatusEnum.Deactivate) },
-                { employee: null, status: Not(StatusEnum.Deactivate) }
-            ];
+            queryBuilder.andWhere(new Brackets(qb => {
+                qb.where("employee.id = :empId", { empId: employeeId })
+                  .orWhere("notification.employeeId IS NULL");
+            }));
         }
 
-        const [notifications, total] = await this.notificationRepository.findAndCount(query);
+        queryBuilder.orderBy("notification.order", "ASC")
+                    .addOrderBy("notification.createdAt", "DESC");
+
+        if (page !== undefined && limit !== undefined) {
+            queryBuilder.skip((page - 1) * limit);
+            queryBuilder.take(limit);
+        }
+
+        const [notifications, total] = await queryBuilder.getManyAndCount();
 
         if (page !== undefined && limit !== undefined) {
             const lastPage = Math.ceil(total / limit);
