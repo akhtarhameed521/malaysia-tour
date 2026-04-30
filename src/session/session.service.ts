@@ -8,6 +8,7 @@ import { ApiResponse } from "../common/helper/api-success.helper";
 import { ApiError } from "../common/helper/api-error.helper";
 import { statusCode } from "../common/messages/status-code.messages";
 import { In, Raw } from "typeorm";
+import { formatDate, formatTime } from "../common/helper/date-time.helper";
 
 export class SessionService {
     private sessionRepository = AppDataSource.getRepository(Session);
@@ -270,8 +271,8 @@ export class SessionService {
 
         const session = this.sessionRepository.create({
             sessionTitle,
-            date:      this.formatDate(rawDate),   // null-safe
-            time:      this.formatTime(rawTime),   // null-safe
+            date:      formatDate(rawDate),   // null-safe
+            time:      formatTime(rawTime),   // null-safe
             location:  location || null,
             speaker:   speaker  || null,
             track:     track    || null,
@@ -295,64 +296,5 @@ export class SessionService {
     }
 
     return new ApiResponse(statusCode.Created, { createdCount }, "Sessions bulk uploaded successfully");
-}
-
-private formatDate(dateInput: any): string | null {
-    // Return null for empty/missing — Postgres accepts NULL for nullable date column
-    if (dateInput === undefined || dateInput === null) return null;
-
-    if (dateInput instanceof Date) {
-        return dateInput.toISOString().split('T')[0];
-    }
-
-    const num = Number(dateInput);
-    if (!isNaN(num) && num > 1) {
-        // Excel serial date → JS Date (1 = 1900-01-01)
-        const date = new Date(Math.round((num - 25569) * 86400 * 1000));
-        return date.toISOString().split('T')[0];
-    }
-
-    const s = String(dateInput).trim();
-    if (!s || s.toLowerCase() === 'nan') return null;
-
-    // Human-readable strings like "2nd May" → parse manually
-    const cleaned = s.replace(/(\d+)(st|nd|rd|th)/i, '$1'); // "2nd May" → "2 May"
-    const parsed = new Date(`${cleaned} 2025`);              // assume current event year
-    if (!isNaN(parsed.getTime())) {
-        return parsed.toISOString().split('T')[0];
-    }
-
-    return null; // unrecognised format — store as null rather than crash
-}
-
-private formatTime(timeInput: any): string | null {
-    // Return null for empty/missing — Postgres accepts NULL for nullable time column
-    if (timeInput === undefined || timeInput === null) return null;
-
-    if (timeInput instanceof Date) {
-        // xlsx with cellDates:true gives us a Date object for time cells
-        const h = timeInput.getHours().toString().padStart(2, '0');
-        const m = timeInput.getMinutes().toString().padStart(2, '0');
-        const s = timeInput.getSeconds().toString().padStart(2, '0');
-        return `${h}:${m}:${s}`;
-    }
-
-    const num = Number(timeInput);
-    if (!isNaN(num) && num >= 0 && num < 1) {
-        // Excel fractional day → HH:MM:SS
-        const totalSeconds = Math.round(num * 86400);
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
-
-    const str = String(timeInput).trim();
-    if (!str || str.toLowerCase() === 'nan') return null;
-
-    // Already a valid HH:MM or HH:MM:SS string
-    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(str)) return str;
-
-    return null;
 }
 }
