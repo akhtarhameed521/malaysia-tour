@@ -33,10 +33,6 @@ export class EmployeeService {
             const normGroup = group.name.toLowerCase().trim();
             const groupFirstWord = normGroup.split(/\s+/)[0];
 
-            // Match if:
-            // 1. First words are identical (e.g. "Thai" matches "THAI AIRWAYS")
-            // 2. One starts with the other
-            // 3. One contains the other
             if (
                 (groupFirstWord && airlineFirstWord && groupFirstWord === airlineFirstWord) ||
                 normGroup.startsWith(normAirline) ||
@@ -93,9 +89,9 @@ export class EmployeeService {
     }
 
     async getEmployeeById(id: number): Promise<ApiResponse<EmployeeEntity>> {
-        const employee = await this.employeeRepository.findOneBy({ 
-            id, 
-            status: Not(StatusEnum.Deactivate) 
+        const employee = await this.employeeRepository.findOneBy({
+            id,
+            status: Not(StatusEnum.Deactivate)
         });
         if (!employee) {
             throw new ApiError(statusCode.NotFound, "Employee not found");
@@ -108,10 +104,9 @@ export class EmployeeService {
         if (!employee || employee.status === StatusEnum.Deactivate) {
             throw new ApiError(statusCode.NotFound, "Employee not found");
         }
-        
+
         const { groupId, hotelId, roomId, airlineId, returnAirlineId, ...restData } = data;
 
-        // 0. Check for duplicate employeeId or email only if they are changing
         if (restData.employeeId && restData.employeeId !== employee.employeeId) {
             const duplicate = await this.employeeRepository.findOne({
                 where: { employeeId: restData.employeeId, id: Not(id) }
@@ -130,7 +125,6 @@ export class EmployeeService {
             }
         }
 
-        // 1. Resolve Relationships/IDs to JSON format
         if (groupId) {
             const group = await this.groupRepository.findOneBy({ id: groupId });
             if (group) employee.group = { id: group.id.toString(), name: group.name };
@@ -151,7 +145,7 @@ export class EmployeeService {
             if (airline) {
                 employee.airline = {
                     name: airline.name,
-                    details: "", 
+                    details: "",
                     departureCity: airline.departureCity,
                     departureDate: airline.departureDate,
                     departureTime: airline.departureTime
@@ -172,7 +166,6 @@ export class EmployeeService {
             }
         }
 
-        // 2. Handle images
         const baseUrl = process.env.BASE_URL;
         if (imagePath) {
             employee.image = `${baseUrl}/Uploads/${path.basename(imagePath)}`;
@@ -181,7 +174,6 @@ export class EmployeeService {
             employee.ticketImage = `${baseUrl}/Uploads/${path.basename(ticketImagePath)}`;
         }
 
-        // 3. Assign rest data (excluding password which should be handled by changePassword)
         if (restData.password) delete restData.password;
         if (restData.email) restData.email = restData.email.toLowerCase();
         Object.assign(employee, restData);
@@ -211,7 +203,7 @@ export class EmployeeService {
         if (!employee || employee.status === StatusEnum.Deactivate) {
             throw new ApiError(statusCode.NotFound, "Employee not found or already deactivated");
         }
-        
+
         employee.status = StatusEnum.Deactivate;
         await this.employeeRepository.save(employee);
         return new ApiResponse(statusCode.OK, null, "Employee deleted successfully");
@@ -230,26 +222,33 @@ export class EmployeeService {
         const totalInExcel = data.length;
 
         const groups = await this.groupRepository.find();
-        const seenInSheet = new Set<string>();
+
+        // FIX: Track employeeId and email separately to catch all duplicate scenarios
+        const seenEmployeeIds = new Set<string>();
+        const seenEmails = new Set<string>();
 
         for (const row of data as any[]) {
             const mappedData = this.mapExcelRowToEmployee(row);
 
-            // Skip ONLY if both are missing - we need at least one ID to track duplicates
-            if (!mappedData.employeeId && !mappedData.email) {
-                invalidCount++;
-                continue;
-            }
+            // FIX: Use rawEmployeeId (no globalId fallback) for dedup so globalId
+            //      shared across rows doesn't cause false sheet-duplicates
+            const rawEmployeeId = mappedData._rawEmployeeId?.toLowerCase();
+            const emailKey = mappedData.email?.toLowerCase();
 
-            // Check for duplicates within the Excel sheet itself
-            const sheetKey = (mappedData.employeeId || mappedData.email).toLowerCase();
-            if (seenInSheet.has(sheetKey)) {
+            // A row is a sheet-duplicate if its employeeId OR email was already seen
+            const isDupById = rawEmployeeId && seenEmployeeIds.has(rawEmployeeId);
+            const isDupByEmail = emailKey && seenEmails.has(emailKey);
+
+            if (isDupById || isDupByEmail) {
                 sheetDuplicateCount++;
                 continue;
             }
-            seenInSheet.add(sheetKey);
 
-            const { plainPassword, ...employeeData } = mappedData;
+            if (rawEmployeeId) seenEmployeeIds.add(rawEmployeeId);
+            if (emailKey) seenEmails.add(emailKey);
+
+            // Remove internal helper field before saving
+            const { plainPassword, _rawEmployeeId, ...employeeData } = mappedData;
 
             // Group assignment logic
             if (!employeeData.group || !employeeData.group.id) {
@@ -266,10 +265,21 @@ export class EmployeeService {
 
             const resolvedPassword = await hashPassword(plainPassword ?? DEFAULT_PLAIN_PASSWORD, 10);
 
-            let employee = await this.employeeRepository.createQueryBuilder("employee")
-                .where("employee.employeeId = :employeeId", { employeeId: employeeData.employeeId })
-                .orWhere("LOWER(employee.email) = LOWER(:email)", { email: employeeData.email })
-                .getOne();
+            let employee = null;
+            if (employeeData.employeeId || employeeData.email) {
+                const query = this.employeeRepository.createQueryBuilder("employee");
+                if (employeeData.employeeId && employeeData.email) {
+                    query.where("(employee.employeeId = :employeeId OR LOWER(employee.email) = LOWER(:email))", {
+                        employeeId: employeeData.employeeId,
+                        email: employeeData.email
+                    });
+                } else if (employeeData.employeeId) {
+                    query.where("employee.employeeId = :employeeId", { employeeId: employeeData.employeeId });
+                } else {
+                    query.where("LOWER(employee.email) = LOWER(:email)", { email: employeeData.email });
+                }
+                employee = await query.getOne();
+            }
 
             if (employee) {
                 Object.assign(employee, employeeData);
@@ -288,13 +298,13 @@ export class EmployeeService {
             }
         }
 
-        return new ApiResponse(statusCode.OK, { 
+        return new ApiResponse(statusCode.OK, {
             totalInExcel,
-            createdCount, 
+            createdCount,
             updatedCount,
             sheetDuplicateCount,
             invalidCount,
-            totalProcessed: createdCount + updatedCount 
+            totalProcessed: createdCount + updatedCount
         }, `${createdCount} created, ${updatedCount} updated, ${sheetDuplicateCount} sheet duplicates skipped. Total rows: ${totalInExcel}`);
     }
 
@@ -311,31 +321,68 @@ export class EmployeeService {
         const totalInExcel = data.length;
 
         const groups = await this.groupRepository.find();
-        const seenInSheet = new Set<string>();
+
+        // FIX: Track employeeId, email, and fullName+phone separately
+        const seenEmployeeIds = new Set<string>();
+        const seenEmails = new Set<string>();
+        const seenNamePhone = new Set<string>(); // fallback for no-identifier rows
 
         for (const row of data as any[]) {
             const mappedData = this.mapExcelRowToEmployee(row);
 
-            if (!mappedData.employeeId && !mappedData.email) {
-                invalidCount++;
-                continue;
-            }
+            const rawEmployeeId = mappedData._rawEmployeeId?.toLowerCase();
+            const emailKey = mappedData.email?.toLowerCase();
+            const namePhoneKey = (mappedData.fullName && mappedData.phone)
+                ? `${mappedData.fullName.toLowerCase().trim()}|${mappedData.phone.trim()}`
+                : null;
 
-            // Check for duplicates within the Excel sheet itself
-            const sheetKey = (mappedData.employeeId || mappedData.email).toLowerCase();
-            if (seenInSheet.has(sheetKey)) {
+            // Duplicate if employeeId OR email already seen.
+            // For rows with no identifiers at all, fall back to fullName+phone.
+            const isDupById = rawEmployeeId && seenEmployeeIds.has(rawEmployeeId);
+            const isDupByEmail = emailKey && seenEmails.has(emailKey);
+            const isDupByNamePhone = !rawEmployeeId && !emailKey && namePhoneKey && seenNamePhone.has(namePhoneKey);
+
+            if (isDupById || isDupByEmail || isDupByNamePhone) {
                 sheetDuplicateCount++;
                 continue;
             }
-            seenInSheet.add(sheetKey);
 
-            const { plainPassword, ...employeeData } = mappedData;
+            if (rawEmployeeId) seenEmployeeIds.add(rawEmployeeId);
+            if (emailKey) seenEmails.add(emailKey);
+            if (!rawEmployeeId && !emailKey && namePhoneKey) seenNamePhone.add(namePhoneKey);
+
+            // Remove internal helper field before saving
+            const { plainPassword, _rawEmployeeId, ...employeeData } = mappedData;
 
             // Check if user already exists in DB
-            const existing = await this.employeeRepository.createQueryBuilder("employee")
-                .where("employee.employeeId = :employeeId", { employeeId: employeeData.employeeId })
-                .orWhere("LOWER(employee.email) = LOWER(:email)", { email: employeeData.email })
-                .getOne();
+            let existing = null;
+            if (employeeData.employeeId || employeeData.email) {
+                // Primary lookup: by employeeId or email
+                const query = this.employeeRepository.createQueryBuilder("employee");
+                if (employeeData.employeeId && employeeData.email) {
+                    query.where("(employee.employeeId = :employeeId OR LOWER(employee.email) = LOWER(:email))", {
+                        employeeId: employeeData.employeeId,
+                        email: employeeData.email
+                    });
+                } else if (employeeData.employeeId) {
+                    query.where("employee.employeeId = :employeeId", { employeeId: employeeData.employeeId });
+                } else {
+                    query.where("LOWER(employee.email) = LOWER(:email)", { email: employeeData.email });
+                }
+                existing = await query.getOne();
+            } else if (employeeData.fullName && employeeData.phone) {
+                // FIX: Fallback for rows with no email AND no employeeId.
+                // Match on fullName + phone to avoid inserting the same person repeatedly.
+                existing = await this.employeeRepository.createQueryBuilder("employee")
+                    .where("LOWER(employee.fullName) = LOWER(:fullName)", { fullName: employeeData.fullName })
+                    .andWhere("employee.phone = :phone", { phone: employeeData.phone })
+                    .getOne();
+            } else if (employeeData.fullName) {
+                // Last resort: match on fullName alone if no other identifiers
+                existing = await this.employeeRepository.createQueryBuilder("employee")
+                    .where("LOWER(employee.fullName) = LOWER(:fullName)", { fullName: employeeData.fullName })
+                    .getOne();
+            }
 
             if (existing) {
                 skippedCount++;
@@ -367,10 +414,10 @@ export class EmployeeService {
             createdCount++;
         }
 
-        return new ApiResponse(statusCode.OK, { 
+        return new ApiResponse(statusCode.OK, {
             totalInExcel,
-            createdCount, 
-            skippedCount, 
+            createdCount,
+            skippedCount,
             sheetDuplicateCount,
             invalidCount,
             totalProcessed: createdCount + skippedCount
@@ -378,13 +425,12 @@ export class EmployeeService {
     }
 
     async assignGroup(identifier: string | number, groupId: number): Promise<ApiResponse<EmployeeEntity>> {
-        // Try to find by numeric id first, then by string employeeId
         let employee: EmployeeEntity | null = null;
-        
+
         if (!isNaN(Number(identifier))) {
             employee = await this.employeeRepository.findOneBy({ id: Number(identifier) });
         }
-        
+
         if (!employee) {
             employee = await this.employeeRepository.findOneBy({ employeeId: identifier.toString() });
         }
@@ -406,11 +452,11 @@ export class EmployeeService {
 
     async removeGroup(identifier: string | number): Promise<ApiResponse<EmployeeEntity>> {
         let employee: EmployeeEntity | null = null;
-        
+
         if (!isNaN(Number(identifier))) {
             employee = await this.employeeRepository.findOneBy({ id: Number(identifier) });
         }
-        
+
         if (!employee) {
             employee = await this.employeeRepository.findOneBy({ employeeId: identifier.toString() });
         }
@@ -450,8 +496,11 @@ export class EmployeeService {
 
         // IDs
         const globalId = str(normRow['globalid']);
+        const rawEmployeeId = str(normRow['employeeid']); // FIX: store raw value separately
+
         mapped.globalId   = globalId;
-        mapped.employeeId = str(normRow['employeeid']) ?? globalId; // fallback to globalId
+        mapped.employeeId = rawEmployeeId ?? globalId;   // DB field still falls back to globalId
+        mapped._rawEmployeeId = rawEmployeeId;           // FIX: expose raw value for dedup (no fallback)
         mapped.localId    = str(normRow['localid']);
 
         // Name / contact
@@ -486,13 +535,12 @@ export class EmployeeService {
         mapped.plainPassword = str(normRow['password']);
 
         // ── GROUP (jsonb) ─────────────────────────────────────────────────
-        // Column header is: "groupId (Select from Group Tab)"
         const groupRaw = str(
             normRow['groupid (select from group tab)'] ??
             normRow['groupid'] ??
             normRow['group id']
         );
-        if (groupRaw) mapped.group.name = groupRaw; // stored as name; ID resolved via findMatchingGroup
+        if (groupRaw) mapped.group.name = groupRaw;
 
         // ── AIRLINE (jsonb) ───────────────────────────────────────────────
         const airlineName    = str(normRow['airlinename']);
@@ -540,13 +588,12 @@ export class EmployeeService {
             where: { status: Not(StatusEnum.Deactivate) }
         });
         const groups = await this.groupRepository.find();
-        
+
         let updatedCount = 0;
 
         for (const employee of employees) {
             let matchedGroup: { id: string, name: string } | null = null;
 
-            // 1. Try to match by existing group name in employee record
             const currentGroupName = employee.group?.name;
             if (currentGroupName) {
                 const found = groups.find(g => g.name.toLowerCase().trim() === currentGroupName.toLowerCase().trim());
@@ -555,12 +602,10 @@ export class EmployeeService {
                 }
             }
 
-            // 2. If no match by name yet, fall back to airline matching (only if ID is still missing)
             if (!matchedGroup && (!employee.group || !employee.group.id) && employee.airline?.name) {
                 matchedGroup = this.findMatchingGroup(employee.airline.name, groups);
             }
 
-            // 3. Update if we found a match and it's either a new assignment or providing a missing ID
             if (matchedGroup && (!employee.group || employee.group.id !== matchedGroup.id)) {
                 employee.group = matchedGroup;
                 await this.employeeRepository.save(employee);

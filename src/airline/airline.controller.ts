@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { AirlineService } from "./airline.service";
 import { asyncHandler } from "../common/helper/async-handler.helper";
+import { ApiError } from "../common/helper/api-error.helper";
+import { statusCode } from "../common/messages/status-code.messages";
 
 export class AirlineController {
     private airlineService: AirlineService;
@@ -37,6 +39,15 @@ export class AirlineController {
         res.status(result.statusCode).json(result);
     });
 
+    bulkUploadAirlines = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        const file = req.file;
+        if (!file) {
+            throw new ApiError(statusCode.BadRequest, "No file uploaded");
+        }
+        const result = await this.airlineService.bulkUploadAirlines(file.buffer);
+        res.status(result.statusCode).json(result);
+    });
+
     // ReturnAirline Controllers
     createReturnAirline = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
         const result = await this.airlineService.createReturnAirline(req.body);
@@ -62,6 +73,15 @@ export class AirlineController {
 
     deleteReturnAirline = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
         const result = await this.airlineService.deleteReturnAirline(Number(req.params.id));
+        res.status(result.statusCode).json(result);
+    });
+
+    bulkUploadReturnAirlines = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        const file = req.file;
+        if (!file) {
+            throw new ApiError(statusCode.BadRequest, "No file uploaded");
+        }
+        const result = await this.airlineService.bulkUploadReturnAirlines(file.buffer);
         res.status(result.statusCode).json(result);
     });
 }

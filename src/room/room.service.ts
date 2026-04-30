@@ -5,6 +5,7 @@ import { CreateRoomDto, UpdateRoomDto } from "./dto/room.dto";
 import { ApiResponse } from "../common/helper/api-success.helper";
 import { ApiError } from "../common/helper/api-error.helper";
 import { statusCode } from "../common/messages/status-code.messages";
+import * as xlsx from "xlsx";
 
 export class RoomService {
     private roomRepository = AppDataSource.getRepository(Room);
@@ -61,5 +62,47 @@ export class RoomService {
         const result = await this.roomRepository.delete({ id });
         if (result.affected === 0) throw new ApiError(statusCode.NotFound, "Room not found");
         return new ApiResponse(statusCode.OK, null, "Room deleted successfully");
+    }
+
+    async bulkUploadRooms(fileBuffer: Buffer): Promise<ApiResponse<any>> {
+        const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+        const hotels = await this.hotelRepository.find();
+        let createdCount = 0;
+        let skippedCount = 0;
+        const totalInExcel = data.length;
+
+        for (const row of data as any[]) {
+            const hotelName = row.hotelId || row.HotelId || row['Hotel Name'] || row['hotelName'];
+            const roomNumber = row.roomNumber || row['Room Number'];
+            const groupType = row.groupType || row['Group Type'];
+            const floor = row.floor || row['Floor'];
+
+            if (!hotelName || !roomNumber) {
+                skippedCount++;
+                continue;
+            }
+
+            const matchedHotel = hotels.find(h => h.name.toLowerCase().trim() === hotelName.toString().toLowerCase().trim());
+
+            if (!matchedHotel) {
+                skippedCount++;
+                continue;
+            }
+
+            const room = this.roomRepository.create({
+                roomNumber: Number(roomNumber),
+                floor: floor ? Number(floor) : null,
+                groupType: groupType ? groupType.toString() : null,
+                hotel: matchedHotel
+            });
+
+            await this.roomRepository.save(room);
+            createdCount++;
+        }
+
+        return new ApiResponse(statusCode.OK, { createdCount, skippedCount, totalInExcel }, `${createdCount} rooms uploaded successfully, ${skippedCount} skipped`);
     }
 }

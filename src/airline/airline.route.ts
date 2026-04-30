@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { AirlineController } from "./airline.controller";
+import { memoryUpload } from "../common/provider/multer.provider";
 import { validateRequest } from "../common/middlewares/validation.middleware";
 import { 
     CreateAirlineSchema, 
@@ -27,8 +28,10 @@ export class AirlineRoute {
         this.router.get("/:id", this.airlineController.getAirlineOne);
         this.router.put("/:id", validateRequest(UpdateAirlineSchema), this.airlineController.updateAirline);
         this.router.delete("/:id", this.airlineController.deleteAirline);
+        this.router.post("/bulk-upload", memoryUpload.single("file"), this.airlineController.bulkUploadAirlines);
 
         // Return Airline Routes
+        this.router.post("/return/bulk-upload", memoryUpload.single("file"), this.airlineController.bulkUploadReturnAirlines);
         this.router.get("/return/:id", this.airlineController.getReturnAirlineOne);
         this.router.put("/return/:id", validateRequest(UpdateReturnAirlineSchema), this.airlineController.updateReturnAirline);
         this.router.delete("/return/:id", this.airlineController.deleteReturnAirline);
