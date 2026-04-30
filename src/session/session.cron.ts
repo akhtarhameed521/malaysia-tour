@@ -24,6 +24,8 @@ export const startSessionCronJobs = () => {
             const dateStr = `${year}-${month}-${day}`;
             const timeStr = `${hours}:${minutes}`;
 
+            console.log(`[Session Cron] Checking for sessions starting at ${dateStr} ${timeStr} (5-minute reminder)`);
+
             const sessionRepository = AppDataSource.getRepository(Session);
             const employeeRepository = AppDataSource.getRepository(EmployeeEntity);
             const notificationRepository = AppDataSource.getRepository(Notification);
@@ -32,8 +34,13 @@ export const startSessionCronJobs = () => {
             const sessions = await sessionRepository.createQueryBuilder("session")
                 .leftJoinAndSelect("session.groups", "group")
                 .where("session.date = :date", { date: dateStr })
-                .andWhere("CAST(session.time AS text) LIKE :time", { time: `${timeStr}%` })
+                .andWhere("EXTRACT(HOUR FROM session.time) = :hours", { hours: parseInt(hours) })
+                .andWhere("EXTRACT(MINUTE FROM session.time) = :minutes", { minutes: parseInt(minutes) })
                 .getMany();
+
+            if (sessions.length > 0) {
+                console.log(`[Session Cron] Found ${sessions.length} sessions matching criteria.`);
+            }
 
             for (const session of sessions) {
                 let targetEmployees: EmployeeEntity[] = [];
@@ -70,6 +77,8 @@ export const startSessionCronJobs = () => {
                 if (uniqueEmployees.length > 0) {
                     const title = `Session Reminder: ${session.sessionTitle}`;
                     const message = `Your session "${session.sessionTitle}" is starting in 5 minutes at ${session.location}.`;
+
+                    console.log(`[Session Cron] Sending reminder for "${session.sessionTitle}" to ${uniqueEmployees.length} unique employees.`);
 
                     // 1. Create DB records for Notifications
                     const notificationsToSave = uniqueEmployees.map(emp => {

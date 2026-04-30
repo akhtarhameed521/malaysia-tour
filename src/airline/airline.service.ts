@@ -6,6 +6,7 @@ import { ApiResponse } from "../common/helper/api-success.helper";
 import { ApiError } from "../common/helper/api-error.helper";
 import { statusCode } from "../common/messages/status-code.messages";
 import * as xlsx from "xlsx";
+import { formatDate, formatTime } from "../common/helper/date-time.helper";
 
 export class AirlineService {
     private airlineRepository = AppDataSource.getRepository(Airline);
@@ -119,8 +120,8 @@ export class AirlineService {
             const mappedData = {
                 name: row.name || row.Name || row['Airline Name'],
                 departureCity: row.departureCity || row.DepartureCity || row['Departure City'],
-                departureDate: row.departureDate || row.DepartureDate || row['Departure Date'],
-                departureTime: row.departureTime || row.DepartureTime || row['Departure Time'],
+                departureDate: formatDate(row.departureDate || row.DepartureDate || row['Departure Date']),
+                departureTime: formatTime(row.departureTime || row.DepartureTime || row['Departure Time']),
                 isReturn: false
             };
 
@@ -146,8 +147,8 @@ export class AirlineService {
             const mappedData = {
                 name: row.name || row.Name || row['Airline Name'],
                 departureCity: row.departureCity || row.DepartureCity || row['Departure City'],
-                departureDate: row.departureDate || row.DepartureDate || row['Departure Date'],
-                departureTime: row.departureTime || row.DepartureTime || row['Departure Time'],
+                departureDate: formatDate(row.departureDate || row.DepartureDate || row['Departure Date']),
+                departureTime: formatTime(row.departureTime || row.DepartureTime || row['Departure Time']),
                 isReturn: true
             };
 
