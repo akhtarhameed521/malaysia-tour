@@ -10,7 +10,11 @@ export const startSessionCronJobs = () => {
     // Run every minute
     cron.schedule("* * * * *", async () => {
         try {
-            const now = new Date();
+            // Get current time in the target timezone
+            const targetTimeZone = process.env.TIMEZONE || "Asia/Karachi"; 
+            const nowInTZ = new Date(new Date().toLocaleString("en-US", { timeZone: targetTimeZone }));
+            
+            const now = nowInTZ;
             // Add 5 minutes to current time
             now.setMinutes(now.getMinutes() + 5);
 
