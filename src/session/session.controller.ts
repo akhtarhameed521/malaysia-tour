@@ -49,7 +49,15 @@ export class SessionController {
         if (!req.file) {
             throw new ApiError(statusCode.BadRequest, "Please upload an Excel or CSV file");
         }
-        const result = await this.sessionService.bulkUploadSessions(req.file.path);
+        const result = await this.sessionService.bulkUploadSessions(req.file.buffer);
+        res.status(result.statusCode).json(result);
+    });
+
+    bulkUpdate = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        if (!req.file) {
+            throw new ApiError(statusCode.BadRequest, "Please upload an Excel or CSV file");
+        }
+        const result = await this.sessionService.bulkUpdateSessions(req.file.buffer);
         res.status(result.statusCode).json(result);
     });
 }
