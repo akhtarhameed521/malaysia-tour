@@ -202,8 +202,8 @@ export class SessionService {
         return new ApiResponse(statusCode.OK, null, "Session deleted successfully");
     }
 
-   async bulkUploadSessions(filePath: string): Promise<ApiResponse<any>> {
-    const workbook = xlsx.readFile(filePath, { cellDates: true });
+   async bulkUploadSessions(fileBuffer: Buffer): Promise<ApiResponse<any>> {
+    const workbook = xlsx.read(fileBuffer, { type: 'buffer', cellDates: true });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const data = xlsx.utils.sheet_to_json(worksheet);
@@ -296,5 +296,136 @@ export class SessionService {
     }
 
     return new ApiResponse(statusCode.Created, { createdCount }, "Sessions bulk uploaded successfully");
+}
+
+async bulkUpdateSessions(fileBuffer: Buffer): Promise<ApiResponse<any>> {
+    const workbook = xlsx.read(fileBuffer, { type: 'buffer', cellDates: true });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = xlsx.utils.sheet_to_json(worksheet);
+
+    const allGroups = await this.groupRepository.find();
+    const groupMap = new Map(allGroups.map(g => [g.name.toLowerCase().trim(), g]));
+
+    let updatedCount = 0;
+    let skippedCount = 0;
+    let notFoundCount = 0;
+    const totalInExcel = data.length;
+
+    for (const row of data as any[]) {
+        const normRow: any = {};
+        for (const key of Object.keys(row)) {
+            normRow[key.toLowerCase().trim()] = row[key];
+        }
+
+        const sessionTitle = normRow['sessiontitle'] ?? null;
+        if (!sessionTitle) continue;
+
+        const rawDate    = normRow['date']     ?? null;
+        const rawTime    = normRow['time']     ?? null;
+        const location   = normRow['location'] ?? null;
+        const speaker    = normRow['speaker']  ?? null;
+        const track      = normRow['track']    ?? null;
+        const airlineName = normRow['airlinename'] ?? null;
+
+        const formattedDate = formatDate(rawDate);
+        const formattedTime = formatTime(rawTime);
+
+        // Match by title AND date
+        let session = await this.sessionRepository.findOne({
+            where: {
+                sessionTitle: sessionTitle,
+                ...(formattedDate ? { date: formattedDate } : {})
+            },
+            relations: ["groups"]
+        });
+
+        if (!session) {
+            notFoundCount++;
+            continue;
+        }
+
+        const groupIds =
+            normRow['groupid (select from group tab)'] ??
+            normRow['groupids'] ??
+            normRow['groupid']  ??
+            null;
+
+        let gIds: number[] = [];
+        if (groupIds !== undefined && groupIds !== null) {
+            if (typeof groupIds === 'number') {
+                gIds = [groupIds];
+            } else if (typeof groupIds === 'string') {
+                try {
+                    const cleaned = groupIds.replace(/'/g, '"');
+                    const parsed = JSON.parse(cleaned);
+                    gIds = Array.isArray(parsed) ? parsed.map(Number) : [Number(parsed)];
+                } catch {
+                    gIds = groupIds.split(',').map((s: string) => Number(s.trim()));
+                }
+            }
+        }
+        gIds = gIds.filter(n => !isNaN(n));
+
+        if (gIds.length === 0 && airlineName) {
+            const matchedGroup = groupMap.get(airlineName.toLowerCase().trim());
+            if (matchedGroup) {
+                gIds = [matchedGroup.id];
+            }
+        }
+
+        const groups = gIds.length > 0
+            ? await this.groupRepository.find({ where: { id: In(gIds) } })
+            : [];
+
+        let hasChanges = false;
+        
+        const isDifferent = (oldVal: any, newVal: any) => {
+            if (newVal === undefined) return false;
+            const o = oldVal ?? null;
+            const n = newVal ?? null;
+            return o !== n;
+        };
+
+        if (isDifferent(session.time, formattedTime)) hasChanges = true;
+        if (isDifferent(session.location, location)) hasChanges = true;
+        if (isDifferent(session.speaker, speaker)) hasChanges = true;
+        if (isDifferent(session.track, track)) hasChanges = true;
+        if (isDifferent(session.airlineName, airlineName)) hasChanges = true;
+
+        if (!hasChanges) {
+            const existingGroupIds = session.groups?.map(g => g.id).sort().join(',') || '';
+            const newGroupIds = groups.map(g => g.id).sort().join(',') || '';
+            if (existingGroupIds !== newGroupIds) hasChanges = true;
+        }
+
+        if (hasChanges) {
+            session.time = formattedTime;
+            session.location = location || null;
+            session.speaker = speaker || null;
+            session.track = track || null;
+            session.airlineName = airlineName || null;
+            if (groups.length > 0) session.groups = groups;
+
+            await this.sessionRepository.save(session);
+            updatedCount++;
+
+            if (gIds.length > 0) {
+                await this.updateEmployeeSessions(gIds, session);
+            }
+            if (airlineName) {
+                await this.updateEmployeeSessionsByAirline(airlineName, session);
+            }
+        } else {
+            skippedCount++;
+        }
+    }
+
+    return new ApiResponse(statusCode.OK, {
+        totalInExcel,
+        updatedCount,
+        skippedCount,
+        notFoundCount
+    }, `${updatedCount} sessions updated, ${skippedCount} skipped (no changes), ${notFoundCount} not found. Total rows: ${totalInExcel}`);
 }
 }
