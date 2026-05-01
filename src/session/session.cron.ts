@@ -15,8 +15,8 @@ export const startSessionCronJobs = () => {
             const nowInTZ = new Date(new Date().toLocaleString("en-US", { timeZone: targetTimeZone }));
             
             const now = nowInTZ;
-            // Add 5 minutes to current time
-            now.setMinutes(now.getMinutes() + 5);
+            // Add 15 minutes to current time
+            now.setMinutes(now.getMinutes() + 15);
 
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -28,7 +28,7 @@ export const startSessionCronJobs = () => {
             const dateStr = `${year}-${month}-${day}`;
             const timeStr = `${hours}:${minutes}`;
 
-            console.log(`[Session Cron] Checking for sessions starting at ${dateStr} ${timeStr} (5-minute reminder)`);
+            console.log(`[Session Cron] Checking for sessions starting at ${dateStr} ${timeStr} (15-minute reminder)`);
 
             const sessionRepository = AppDataSource.getRepository(Session);
             const employeeRepository = AppDataSource.getRepository(EmployeeEntity);
@@ -70,7 +70,7 @@ export const startSessionCronJobs = () => {
 
                 if (uniqueEmployees.length > 0) {
                     const title = `Session Reminder: ${session.sessionTitle}`;
-                    const message = `Your session "${session.sessionTitle}" is starting in 5 minutes at ${session.location}.`;
+                    const message = `Your session "${session.sessionTitle}" is starting in 15 minutes at ${session.location}.`;
 
                     console.log(`[Session Cron] Sending reminder for "${session.sessionTitle}" to ${uniqueEmployees.length} unique employees.`);
 

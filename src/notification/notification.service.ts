@@ -14,7 +14,36 @@ export class NotificationService {
     private employeeRepository = AppDataSource.getRepository(EmployeeEntity);
 
     async createNotification(data: CreateNotificationDto): Promise<ApiResponse<Notification>> {
-        const { employeeId, ...notifData } = data;
+        const { employeeId, groupIds, ...notifData } = data;
+
+        if (employeeId && groupIds && groupIds.length > 0) {
+            throw new ApiError(statusCode.BadRequest, "Please provide either employeeId or groupIds, not both.");
+        }
+
+        if (groupIds && groupIds.length > 0) {
+            const employees = await this.employeeRepository
+                .createQueryBuilder("employee")
+                .where("employee.group->>'id' IN (:...ids)", { ids: groupIds })
+                .getMany();
+
+            if (employees.length === 0) {
+                throw new ApiError(statusCode.NotFound, "No employees found in the specified groups");
+            }
+
+            const notifications = employees.map(emp => {
+                const notification = this.notificationRepository.create(notifData);
+                notification.employee = emp;
+                return notification;
+            });
+            await this.notificationRepository.save(notifications);
+
+            const tokens = employees.map(e => e.fcmToken).filter(t => !!t);
+            if (tokens.length > 0) {
+                await this.sendPushNotification(tokens, notifData.title, notifData.message);
+            }
+            return new ApiResponse(statusCode.Created, notifications[0], "Notifications created and sent to groups");
+        }
+
         const notification = this.notificationRepository.create(notifData);
 
         if (employeeId) {
