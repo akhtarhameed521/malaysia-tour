@@ -9,7 +9,6 @@ import { statusCode } from "../common/messages/status-code.messages";
 import { In } from "typeorm";
 import * as path from "path";
 import * as fs from "fs";
-import { getVideoDurationInSeconds } from "get-video-duration";
 
 const GLOBAL_ROOM_NAME = "Shared Chat";
 const MAX_VIDEO_DURATION_SECONDS = 60; // 1 minute
@@ -155,7 +154,10 @@ export class ChatService {
             } else if (file.mimetype.startsWith("video/")) {
                 // Check video duration
                 try {
+                    // Dynamic import to handle ESM package in CommonJS environment
+                    const { getVideoDurationInSeconds } = await (eval('import("get-video-duration")') as Promise<any>);
                     const duration = await getVideoDurationInSeconds(file.path);
+                    
                     if (duration > MAX_VIDEO_DURATION_SECONDS) {
                         // Delete the file if it exceeds limit
                         if (fs.existsSync(file.path)) {
