@@ -11,6 +11,16 @@ export const errorHandler = (
   next: NextFunction
 ) => {
   console.error("Error:", err);
+  
+  // Handle JSON parse errors (SyntaxError from body-parser)
+  if (err instanceof SyntaxError && (err as any).status === 400 && 'body' in err) {
+    return res.status(statusCode.BadRequest).json({
+      statusCode: statusCode.BadRequest,
+      success: false,
+      message: "Invalid JSON format in request body. Please check for extra quotes or trailing commas.",
+      data: null,
+    });
+  }
 
   // Handle Zod validation errors
   if (err instanceof ZodError) {

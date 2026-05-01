@@ -46,7 +46,7 @@ export class EmployeeService {
         return null;
     }
 
-    async getAllEmployees(page?: number, limit?: number, groupId?: string): Promise<ApiResponse<EmployeeEntity[]>> {
+    async getAllEmployees(page?: number, limit?: number, groupId?: string): Promise<ApiResponse<any[]>> {
         const whereCondition: any = {
             status: Not(StatusEnum.Deactivate)
         };
@@ -67,11 +67,31 @@ export class EmployeeService {
 
         const [employees, total] = await this.employeeRepository.findAndCount(findOptions);
 
+        // Fetch hotels to match names with IDs
+        const hotels = await this.hotelRepository.find();
+        const hotelMap = new Map<string, string>();
+        hotels.forEach(h => {
+            if (h.name) {
+                hotelMap.set(h.name.toLowerCase().trim(), h.id.toString());
+            }
+        });
+
+        const employeesWithHotelId = employees.map(emp => {
+            const employeeData = { ...emp } as any;
+            if (emp.hotel) {
+                const normName = emp.hotel.toLowerCase().trim();
+                employeeData.hotelId = hotelMap.get(normName) || null;
+            } else {
+                employeeData.hotelId = null;
+            }
+            return employeeData;
+        });
+
         if (page !== undefined && limit !== undefined) {
             const lastPage = Math.ceil(total / limit);
-            return new ApiResponse(statusCode.OK, employees, "Employees retrieved successfully", page, total, lastPage);
+            return new ApiResponse(statusCode.OK, employeesWithHotelId, "Employees retrieved successfully", page, total, lastPage);
         } else {
-            return new ApiResponse(statusCode.OK, employees, "Employees retrieved successfully", undefined, total);
+            return new ApiResponse(statusCode.OK, employeesWithHotelId, "Employees retrieved successfully", undefined, total);
         }
     }
 

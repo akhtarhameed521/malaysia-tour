@@ -6,6 +6,10 @@ export const CreateNotificationSchema = z.object({
     message: z.string().min(1, "Message is required"),
     order: z.number().optional(),
     employeeId: z.number().optional(),
+    groupIds: z.array(z.string()).optional(),
+}).refine(data => !(data.employeeId && data.groupIds && data.groupIds.length > 0), {
+    message: "Please provide either employeeId or groupIds, not both",
+    path: ["employeeId"]
 });
 
 export const UpdateNotificationSchema = z.object({
