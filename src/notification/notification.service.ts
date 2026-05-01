@@ -139,6 +139,16 @@ export class NotificationService {
         return new ApiResponse(statusCode.OK, null, "All notifications marked as read");
     }
 
+    async markAsRead(id: number): Promise<ApiResponse<Notification>> {
+        const notification = await this.notificationRepository.findOneBy({ id });
+        if (!notification) {
+            throw new ApiError(statusCode.NotFound, "Notification not found");
+        }
+        notification.isRead = true;
+        await this.notificationRepository.save(notification);
+        return new ApiResponse(statusCode.OK, notification, "Notification marked as read");
+    }
+
     async deleteNotification(id: number): Promise<ApiResponse<null>> {
         const notification = await this.notificationRepository.findOneBy({ id });
         if (!notification || notification.status === StatusEnum.Deactivate) {
