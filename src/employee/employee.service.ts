@@ -67,31 +67,86 @@ export class EmployeeService {
 
         const [employees, total] = await this.employeeRepository.findAndCount(findOptions);
 
-        // Fetch hotels to match names with IDs
-        const hotels = await this.hotelRepository.find();
+        // Fetch all related entities for matching
+        const [hotels, rooms, airlines, returnAirlines] = await Promise.all([
+            this.hotelRepository.find(),
+            this.roomRepository.find({ relations: ["hotel"] }),
+            this.airlineRepository.find(),
+            this.returnAirlineRepository.find()
+        ]);
+
+        // Create mapping maps
         const hotelMap = new Map<string, string>();
         hotels.forEach(h => {
-            if (h.name) {
-                hotelMap.set(h.name.toLowerCase().trim(), h.id.toString());
-            }
+            if (h.name) hotelMap.set(h.name.toLowerCase().trim(), h.id.toString());
         });
 
-        const employeesWithHotelId = employees.map(emp => {
+        const roomMap = new Map<string, string>();
+        rooms.forEach(r => {
+            const hotelName = r.hotel?.name?.toLowerCase().trim() || "";
+            roomMap.set(`${hotelName}|${r.roomNumber}`, r.id.toString());
+        });
+
+        const airlineMap = new Map<string, string>();
+        airlines.forEach(a => {
+            if (a.name) airlineMap.set(a.name.toLowerCase().trim(), a.id.toString());
+        });
+
+        const returnAirlineMap = new Map<string, string>();
+        returnAirlines.forEach(ra => {
+            if (ra.name) returnAirlineMap.set(ra.name.toLowerCase().trim(), ra.id.toString());
+        });
+
+        const employeesWithIds = employees.map(emp => {
             const employeeData = { ...emp } as any;
+
+            // Hotel (Convert from string to object with id)
             if (emp.hotel) {
                 const normName = emp.hotel.toLowerCase().trim();
-                employeeData.hotelId = hotelMap.get(normName) || null;
+                employeeData.hotel = {
+                    name: emp.hotel,
+                    id: hotelMap.get(normName) || null
+                };
             } else {
-                employeeData.hotelId = null;
+                employeeData.hotel = null;
             }
+
+            // Room
+            if (emp.room) {
+                const hotelName = (typeof emp.hotel === 'string' ? emp.hotel : (emp.hotel as any)?.name)?.toLowerCase().trim() || "";
+                const roomKey = `${hotelName}|${emp.room.number}`;
+                employeeData.room = {
+                    ...emp.room,
+                    id: roomMap.get(roomKey) || null
+                };
+            }
+
+            // Airline
+            if (emp.airline) {
+                const normName = emp.airline.name?.toLowerCase().trim() || "";
+                employeeData.airline = {
+                    ...emp.airline,
+                    id: airlineMap.get(normName) || null
+                };
+            }
+
+            // Return Airline
+            if (emp.returnAirline) {
+                const normName = emp.returnAirline.name?.toLowerCase().trim() || "";
+                employeeData.returnAirline = {
+                    ...emp.returnAirline,
+                    id: returnAirlineMap.get(normName) || null
+                };
+            }
+
             return employeeData;
         });
 
         if (page !== undefined && limit !== undefined) {
             const lastPage = Math.ceil(total / limit);
-            return new ApiResponse(statusCode.OK, employeesWithHotelId, "Employees retrieved successfully", page, total, lastPage);
+            return new ApiResponse(statusCode.OK, employeesWithIds, "Employees retrieved successfully", page, total, lastPage);
         } else {
-            return new ApiResponse(statusCode.OK, employeesWithHotelId, "Employees retrieved successfully", undefined, total);
+            return new ApiResponse(statusCode.OK, employeesWithIds, "Employees retrieved successfully", undefined, total);
         }
     }
 
