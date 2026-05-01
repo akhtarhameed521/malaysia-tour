@@ -100,47 +100,73 @@ export class EmployeeService {
         const employeesWithIds = employees.map(emp => {
             const employeeData = { ...emp } as any;
 
-            // Hotel (Convert from string to object with id)
+            // Helper to normalize strings
+            const norm = (s: any) => String(s || "").toLowerCase().trim();
+
+            // 1. Hotel Matching
             if (emp.hotel) {
-                const normName = emp.hotel.toLowerCase().trim();
-                employeeData.hotel = {
-                    name: emp.hotel,
-                    id: hotelMap.get(normName) || null
-                };
+                const empHotelNorm = norm(emp.hotel);
+                const matchedHotel = hotels.find(h => {
+                    const hName = norm(h.name);
+                    return hName === empHotelNorm || hName.includes(empHotelNorm) || empHotelNorm.includes(hName);
+                });
+                employeeData.hotelId = matchedHotel ? matchedHotel.id.toString() : null;
             } else {
-                employeeData.hotel = null;
+                employeeData.hotelId = null;
             }
 
-            // Room
-            if (emp.room) {
-                const hotelName = (typeof emp.hotel === 'string' ? emp.hotel : (emp.hotel as any)?.name)?.toLowerCase().trim() || "";
-                const roomKey = `${hotelName}|${emp.room.number}`;
+            // 2. Room Matching
+            if (emp.room && emp.room.number) {
+                const empHotelNorm = norm(emp.hotel);
+                const empRoomNum = norm(emp.room.number);
+                
+                const matchedRoom = rooms.find(r => {
+                    const rHotelName = norm(r.hotel?.name);
+                    const rNum = norm(r.roomNumber);
+                    // Match room number exactly, but hotel name flexibly
+                    const hotelMatch = !empHotelNorm || rHotelName === empHotelNorm || rHotelName.includes(empHotelNorm) || empHotelNorm.includes(rHotelName);
+                    return hotelMatch && rNum === empRoomNum;
+                });
+
                 employeeData.room = {
                     ...emp.room,
-                    id: roomMap.get(roomKey) || null
+                    id: matchedRoom ? matchedRoom.id.toString() : null
                 };
             }
 
-            // Airline
-            if (emp.airline) {
-                const normName = emp.airline.name?.toLowerCase().trim() || "";
+            // 3. Airline Matching
+            if (emp.airline && emp.airline.name) {
+                const empAirNorm = norm(emp.airline.name);
+                const matchedAirline = airlines.find(a => {
+                    const aName = norm(a.name);
+                    // Match if names are similar or start with the same word
+                    const wordMatch = aName.split(' ')[0] === empAirNorm.split(' ')[0] && aName.split(' ')[0].length > 2;
+                    return aName === empAirNorm || aName.includes(empAirNorm) || empAirNorm.includes(aName) || wordMatch;
+                });
                 employeeData.airline = {
                     ...emp.airline,
-                    id: airlineMap.get(normName) || null
+                    id: matchedAirline ? matchedAirline.id.toString() : null
                 };
             }
 
-            // Return Airline
-            if (emp.returnAirline) {
-                const normName = emp.returnAirline.name?.toLowerCase().trim() || "";
+            // 4. Return Airline Matching
+            if (emp.returnAirline && emp.returnAirline.name) {
+                const empAirNorm = norm(emp.returnAirline.name);
+                const matchedReturnAirline = returnAirlines.find(ra => {
+                    const raName = norm(ra.name);
+                    const wordMatch = raName.split(' ')[0] === empAirNorm.split(' ')[0] && raName.split(' ')[0].length > 2;
+                    return raName === empAirNorm || raName.includes(empAirNorm) || empAirNorm.includes(raName) || wordMatch;
+                });
                 employeeData.returnAirline = {
                     ...emp.returnAirline,
-                    id: returnAirlineMap.get(normName) || null
+                    id: matchedReturnAirline ? matchedReturnAirline.id.toString() : null
                 };
             }
 
             return employeeData;
         });
+        
+        // ... rest of the logic
 
         if (page !== undefined && limit !== undefined) {
             const lastPage = Math.ceil(total / limit);
