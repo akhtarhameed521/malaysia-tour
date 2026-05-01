@@ -1,8 +1,8 @@
-// @middlewares/error-handler.middleware.ts
 import { ApiError } from "@helper/api-error.helper";
 import { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { statusCode } from "@messages";
+import multer from "multer";
 
 export const errorHandler = (
   err: any,
@@ -12,6 +12,16 @@ export const errorHandler = (
 ) => {
   console.error("Error:", err);
   
+  // Handle Multer file size limit errors
+  if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+    return res.status(statusCode.BadRequest).json({
+      statusCode: statusCode.BadRequest,
+      success: false,
+      message: "video should be less than 50 mb",
+      data: null,
+    });
+  }
+
   // Handle JSON parse errors (SyntaxError from body-parser)
   if (err instanceof SyntaxError && (err as any).status === 400 && 'body' in err) {
     return res.status(statusCode.BadRequest).json({

@@ -3,7 +3,7 @@ import { z } from "zod";
 export const SendMessageSchema = z.object({
     chatRoomId: z.coerce.number({ message: "chatRoomId is required" }),
     content: z.string().optional().nullable(),
-    messageType: z.enum(["text", "image", "file"]).optional().default("text"),
+    messageType: z.enum(["text", "image", "file", "video"]).optional().default("text"),
 }).strict();
 
 export type SendMessageDto = z.infer<typeof SendMessageSchema>;
