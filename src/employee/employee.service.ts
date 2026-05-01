@@ -584,8 +584,7 @@ async bulkUpdate(fileBuffer: Buffer): Promise<ApiResponse<any>> {
 
         let existing = null;
         if (hasValidEmpId || hasValidEmail) {
-            const query = this.employeeRepository.createQueryBuilder("employee")
-                .addSelect("employee.password");
+            const query = this.employeeRepository.createQueryBuilder("employee");
             if (hasValidEmpId && hasValidEmail) {
                 query.where("(employee.employeeId = :employeeId OR LOWER(employee.email) = LOWER(:email))", {
                     employeeId: employeeData.employeeId,
@@ -599,13 +598,11 @@ async bulkUpdate(fileBuffer: Buffer): Promise<ApiResponse<any>> {
             existing = await query.getOne();
         } else if (employeeData.fullName && employeeData.phone) {
             existing = await this.employeeRepository.createQueryBuilder("employee")
-                .addSelect("employee.password")
                 .where("LOWER(employee.fullName) = LOWER(:fullName)", { fullName: employeeData.fullName })
                 .andWhere("employee.phone = :phone", { phone: employeeData.phone })
                 .getOne();
         } else if (employeeData.fullName) {
             existing = await this.employeeRepository.createQueryBuilder("employee")
-                .addSelect("employee.password")
                 .where("LOWER(employee.fullName) = LOWER(:fullName)", { fullName: employeeData.fullName })
                 .getOne();
         }
@@ -670,18 +667,6 @@ async bulkUpdate(fileBuffer: Buffer): Promise<ApiResponse<any>> {
             }
         }
         
-        if (plainPassword) {
-            const isPasswordMatch = (existing.password && plainPassword) 
-                ? await comparePassword(plainPassword, existing.password) 
-                : false;
-            
-            if (!isPasswordMatch) {
-                hasChanges = true;
-                const resolvedPassword = await hashPassword(plainPassword, 10);
-                employeeData.password = resolvedPassword;
-            }
-        }
-
         if (hasChanges) {
             Object.assign(existing, employeeData);
             await this.employeeRepository.save(existing);
