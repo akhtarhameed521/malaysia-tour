@@ -209,201 +209,87 @@ export class EmployeeService {
         return new ApiResponse(statusCode.OK, null, "Employee deleted successfully");
     }
 
-    async bulkUpload(fileBuffer: Buffer): Promise<ApiResponse<any>> {
-        const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
-        const sheetName = workbook.SheetNames[0];
-        const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+  async bulkUpload(fileBuffer: Buffer): Promise<ApiResponse<any>> {
+    const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-        const DEFAULT_PLAIN_PASSWORD = 'Welcome123';
-        let createdCount = 0;
-        let updatedCount = 0;
-        let invalidCount = 0;
-        let sheetDuplicateCount = 0;
-        const totalInExcel = data.length;
+    const DEFAULT_PLAIN_PASSWORD = 'Welcome123';
+    let createdCount = 0;
+    let updatedCount = 0;
+    let invalidCount = 0;
+    let sheetDuplicateCount = 0;
+    const totalInExcel = data.length;
 
-        const groups = await this.groupRepository.find();
+    const groups = await this.groupRepository.find();
 
-        // FIX: Track employeeId and email separately to catch all duplicate scenarios
-        const seenEmployeeIds = new Set<string>();
-        const seenEmails = new Set<string>();
+    const seenEmployeeIds = new Set<string>();
+    const seenEmails = new Set<string>();
 
-        for (const row of data as any[]) {
-            const mappedData = this.mapExcelRowToEmployee(row);
+    for (const row of data as any[]) {
+        const mappedData = this.mapExcelRowToEmployee(row);
 
-            // FIX: Use rawEmployeeId (no globalId fallback) for dedup so globalId
-            //      shared across rows doesn't cause false sheet-duplicates
-            const rawEmployeeId = mappedData._rawEmployeeId?.toLowerCase();
-            const emailKey = mappedData.email?.toLowerCase();
+        const rawEmployeeId = mappedData._rawEmployeeId?.toLowerCase() || null;
+        const emailKey = mappedData.email?.toLowerCase() || null;
 
-            // A row is a sheet-duplicate if its employeeId OR email was already seen
-            const isDupById = rawEmployeeId && seenEmployeeIds.has(rawEmployeeId);
-            const isDupByEmail = emailKey && seenEmails.has(emailKey);
+        const isDupById = rawEmployeeId && rawEmployeeId !== '0' && seenEmployeeIds.has(rawEmployeeId);
+        const isDupByEmail = emailKey && emailKey !== 'na' && seenEmails.has(emailKey);
 
-            if (isDupById || isDupByEmail) {
-                sheetDuplicateCount++;
-                continue;
-            }
-
-            if (rawEmployeeId) seenEmployeeIds.add(rawEmployeeId);
-            if (emailKey) seenEmails.add(emailKey);
-
-            // Remove internal helper field before saving
-            const { plainPassword, _rawEmployeeId, ...employeeData } = mappedData;
-
-            // Group assignment logic
-            if (!employeeData.group || !employeeData.group.id) {
-                let matchedGroup: { id: string, name: string } | null = null;
-                if (employeeData.group?.name) {
-                    const found = groups.find(g => g.name.toLowerCase().trim() === employeeData.group.name.toLowerCase().trim());
-                    if (found) matchedGroup = { id: found.id.toString(), name: found.name };
-                }
-                if (!matchedGroup && employeeData.airline?.name) {
-                    matchedGroup = this.findMatchingGroup(employeeData.airline.name, groups);
-                }
-                if (matchedGroup) employeeData.group = matchedGroup;
-            }
-
-            const resolvedPassword = await hashPassword(plainPassword ?? DEFAULT_PLAIN_PASSWORD, 10);
-
-            let employee = null;
-            if (employeeData.employeeId || employeeData.email) {
-                const query = this.employeeRepository.createQueryBuilder("employee");
-                if (employeeData.employeeId && employeeData.email) {
-                    query.where("(employee.employeeId = :employeeId OR LOWER(employee.email) = LOWER(:email))", {
-                        employeeId: employeeData.employeeId,
-                        email: employeeData.email
-                    });
-                } else if (employeeData.employeeId) {
-                    query.where("employee.employeeId = :employeeId", { employeeId: employeeData.employeeId });
-                } else {
-                    query.where("LOWER(employee.email) = LOWER(:email)", { email: employeeData.email });
-                }
-                employee = await query.getOne();
-            }
-
-            if (employee) {
-                Object.assign(employee, employeeData);
-                if (plainPassword) employee.password = resolvedPassword;
-                await this.employeeRepository.save(employee);
-                updatedCount++;
-            } else {
-                const newEmployee = this.employeeRepository.create({
-                    ...employeeData,
-                    password: resolvedPassword,
-                    role: employeeData.role || "Member",
-                    status: StatusEnum.Active
-                });
-                await this.employeeRepository.save(newEmployee);
-                createdCount++;
-            }
+        if (isDupById || isDupByEmail) {
+            sheetDuplicateCount++;
+            continue;
         }
 
-        return new ApiResponse(statusCode.OK, {
-            totalInExcel,
-            createdCount,
-            updatedCount,
-            sheetDuplicateCount,
-            invalidCount,
-            totalProcessed: createdCount + updatedCount
-        }, `${createdCount} created, ${updatedCount} updated, ${sheetDuplicateCount} sheet duplicates skipped. Total rows: ${totalInExcel}`);
-    }
+        if (rawEmployeeId && rawEmployeeId !== '0') seenEmployeeIds.add(rawEmployeeId);
+        if (emailKey && emailKey !== 'na') seenEmails.add(emailKey);
 
-    async bulkUploadMissing(fileBuffer: Buffer): Promise<ApiResponse<any>> {
-        const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
-        const sheetName = workbook.SheetNames[0];
-        const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+        const { plainPassword, _rawEmployeeId, ...employeeData } = mappedData;
 
-        const DEFAULT_PLAIN_PASSWORD = 'Welcome123';
-        let createdCount = 0;
-        let skippedCount = 0;
-        let invalidCount = 0;
-        let sheetDuplicateCount = 0;
-        const totalInExcel = data.length;
+        // Null out placeholder values
+        if (employeeData.employeeId === '0') employeeData.employeeId = null;
+        if (employeeData.globalId === '0') employeeData.globalId = null;
+        if (employeeData.email === 'na') employeeData.email = null;
 
-        const groups = await this.groupRepository.find();
-
-        // FIX: Track employeeId, email, and fullName+phone separately
-        const seenEmployeeIds = new Set<string>();
-        const seenEmails = new Set<string>();
-        const seenNamePhone = new Set<string>(); // fallback for no-identifier rows
-
-        for (const row of data as any[]) {
-            const mappedData = this.mapExcelRowToEmployee(row);
-
-            const rawEmployeeId = mappedData._rawEmployeeId?.toLowerCase();
-            const emailKey = mappedData.email?.toLowerCase();
-            const namePhoneKey = (mappedData.fullName && mappedData.phone)
-                ? `${mappedData.fullName.toLowerCase().trim()}|${mappedData.phone.trim()}`
-                : null;
-
-            // Duplicate if employeeId OR email already seen.
-            // For rows with no identifiers at all, fall back to fullName+phone.
-            const isDupById = rawEmployeeId && seenEmployeeIds.has(rawEmployeeId);
-            const isDupByEmail = emailKey && seenEmails.has(emailKey);
-            const isDupByNamePhone = !rawEmployeeId && !emailKey && namePhoneKey && seenNamePhone.has(namePhoneKey);
-
-            if (isDupById || isDupByEmail || isDupByNamePhone) {
-                sheetDuplicateCount++;
-                continue;
+        // Group assignment logic
+        if (!employeeData.group || !employeeData.group.id) {
+            let matchedGroup: { id: string, name: string } | null = null;
+            if (employeeData.group?.name) {
+                const found = groups.find(g => g.name.toLowerCase().trim() === employeeData.group.name.toLowerCase().trim());
+                if (found) matchedGroup = { id: found.id.toString(), name: found.name };
             }
-
-            if (rawEmployeeId) seenEmployeeIds.add(rawEmployeeId);
-            if (emailKey) seenEmails.add(emailKey);
-            if (!rawEmployeeId && !emailKey && namePhoneKey) seenNamePhone.add(namePhoneKey);
-
-            // Remove internal helper field before saving
-            const { plainPassword, _rawEmployeeId, ...employeeData } = mappedData;
-
-            // Check if user already exists in DB
-            let existing = null;
-            if (employeeData.employeeId || employeeData.email) {
-                // Primary lookup: by employeeId or email
-                const query = this.employeeRepository.createQueryBuilder("employee");
-                if (employeeData.employeeId && employeeData.email) {
-                    query.where("(employee.employeeId = :employeeId OR LOWER(employee.email) = LOWER(:email))", {
-                        employeeId: employeeData.employeeId,
-                        email: employeeData.email
-                    });
-                } else if (employeeData.employeeId) {
-                    query.where("employee.employeeId = :employeeId", { employeeId: employeeData.employeeId });
-                } else {
-                    query.where("LOWER(employee.email) = LOWER(:email)", { email: employeeData.email });
-                }
-                existing = await query.getOne();
-            } else if (employeeData.fullName && employeeData.phone) {
-                // FIX: Fallback for rows with no email AND no employeeId.
-                // Match on fullName + phone to avoid inserting the same person repeatedly.
-                existing = await this.employeeRepository.createQueryBuilder("employee")
-                    .where("LOWER(employee.fullName) = LOWER(:fullName)", { fullName: employeeData.fullName })
-                    .andWhere("employee.phone = :phone", { phone: employeeData.phone })
-                    .getOne();
-            } else if (employeeData.fullName) {
-                // Last resort: match on fullName alone if no other identifiers
-                existing = await this.employeeRepository.createQueryBuilder("employee")
-                    .where("LOWER(employee.fullName) = LOWER(:fullName)", { fullName: employeeData.fullName })
-                    .getOne();
+            if (!matchedGroup && employeeData.airline?.name) {
+                matchedGroup = this.findMatchingGroup(employeeData.airline.name, groups);
             }
+            if (matchedGroup) employeeData.group = matchedGroup;
+        }
 
-            if (existing) {
-                skippedCount++;
-                continue;
+        const resolvedPassword = await hashPassword(plainPassword ?? DEFAULT_PLAIN_PASSWORD, 10);
+
+        const hasValidEmpId = employeeData.employeeId && employeeData.employeeId !== '0';
+        const hasValidEmail = employeeData.email && employeeData.email !== 'na';
+
+        let employee = null;
+        if (hasValidEmpId || hasValidEmail) {
+            const query = this.employeeRepository.createQueryBuilder("employee");
+            if (hasValidEmpId && hasValidEmail) {
+                query.where("(employee.employeeId = :employeeId OR LOWER(employee.email) = LOWER(:email))", {
+                    employeeId: employeeData.employeeId,
+                    email: employeeData.email
+                });
+            } else if (hasValidEmpId) {
+                query.where("employee.employeeId = :employeeId", { employeeId: employeeData.employeeId });
+            } else {
+                query.where("LOWER(employee.email) = LOWER(:email)", { email: employeeData.email });
             }
+            employee = await query.getOne();
+        }
 
-            // Group assignment logic
-            if (!employeeData.group || !employeeData.group.id) {
-                let matchedGroup: { id: string, name: string } | null = null;
-                if (employeeData.group?.name) {
-                    const found = groups.find(g => g.name.toLowerCase().trim() === employeeData.group.name.toLowerCase().trim());
-                    if (found) matchedGroup = { id: found.id.toString(), name: found.name };
-                }
-                if (!matchedGroup && employeeData.airline?.name) {
-                    matchedGroup = this.findMatchingGroup(employeeData.airline.name, groups);
-                }
-                if (matchedGroup) employeeData.group = matchedGroup;
-            }
-
-            const resolvedPassword = await hashPassword(plainPassword ?? DEFAULT_PLAIN_PASSWORD, 10);
-
+        if (employee) {
+            Object.assign(employee, employeeData);
+            if (plainPassword) employee.password = resolvedPassword;
+            await this.employeeRepository.save(employee);
+            updatedCount++;
+        } else {
             const newEmployee = this.employeeRepository.create({
                 ...employeeData,
                 password: resolvedPassword,
@@ -413,16 +299,243 @@ export class EmployeeService {
             await this.employeeRepository.save(newEmployee);
             createdCount++;
         }
-
-        return new ApiResponse(statusCode.OK, {
-            totalInExcel,
-            createdCount,
-            skippedCount,
-            sheetDuplicateCount,
-            invalidCount,
-            totalProcessed: createdCount + skippedCount
-        }, `${createdCount} new created, ${skippedCount} DB matches skipped, ${sheetDuplicateCount} sheet duplicates skipped. Total rows: ${totalInExcel}`);
     }
+
+    return new ApiResponse(statusCode.OK, {
+        totalInExcel,
+        createdCount,
+        updatedCount,
+        sheetDuplicateCount,
+        invalidCount,
+        totalProcessed: createdCount + updatedCount
+    }, `${createdCount} created, ${updatedCount} updated, ${sheetDuplicateCount} sheet duplicates skipped. Total rows: ${totalInExcel}`);
+}
+
+async bulkUploadMissing(fileBuffer: Buffer): Promise<ApiResponse<any>> {
+    const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+    const DEFAULT_PLAIN_PASSWORD = 'Welcome123';
+    let createdCount = 0;
+    let skippedCount = 0;
+    let invalidCount = 0;
+    let sheetDuplicateCount = 0;
+    const totalInExcel = data.length;
+
+    const groups = await this.groupRepository.find();
+
+    const seenEmployeeIds = new Set<string>();
+    const seenEmails = new Set<string>();
+    const seenNamePhone = new Set<string>();
+
+    for (const row of data as any[]) {
+        const mappedData = this.mapExcelRowToEmployee(row);
+
+        const rawEmployeeId = mappedData._rawEmployeeId?.toLowerCase() || null;
+        const emailKey = mappedData.email?.toLowerCase() || null;
+        const namePhoneKey = (mappedData.fullName && mappedData.phone)
+            ? `${mappedData.fullName.toLowerCase().trim()}|${mappedData.phone.trim()}`
+            : null;
+
+        const isDupById = rawEmployeeId && rawEmployeeId !== '0' && seenEmployeeIds.has(rawEmployeeId);
+        const isDupByEmail = emailKey && emailKey !== 'na' && seenEmails.has(emailKey);
+        const isDupByNamePhone = !rawEmployeeId && !emailKey && namePhoneKey && seenNamePhone.has(namePhoneKey);
+
+        if (isDupById || isDupByEmail || isDupByNamePhone) {
+            sheetDuplicateCount++;
+            continue;
+        }
+
+        if (rawEmployeeId && rawEmployeeId !== '0') seenEmployeeIds.add(rawEmployeeId);
+        if (emailKey && emailKey !== 'na') seenEmails.add(emailKey);
+        if (!rawEmployeeId && !emailKey && namePhoneKey) seenNamePhone.add(namePhoneKey);
+
+        const { plainPassword, _rawEmployeeId, ...employeeData } = mappedData;
+
+        // Null out placeholder values
+        if (employeeData.employeeId === '0') employeeData.employeeId = null;
+        if (employeeData.globalId === '0') employeeData.globalId = null;
+        if (employeeData.email === 'na') employeeData.email = null;
+
+        const hasValidEmpId = employeeData.employeeId && employeeData.employeeId !== '0';
+        const hasValidEmail = employeeData.email && employeeData.email !== 'na';
+
+        // Check if user already exists in DB
+        let existing = null;
+        if (hasValidEmpId || hasValidEmail) {
+            const query = this.employeeRepository.createQueryBuilder("employee");
+            if (hasValidEmpId && hasValidEmail) {
+                query.where("(employee.employeeId = :employeeId OR LOWER(employee.email) = LOWER(:email))", {
+                    employeeId: employeeData.employeeId,
+                    email: employeeData.email
+                });
+            } else if (hasValidEmpId) {
+                query.where("employee.employeeId = :employeeId", { employeeId: employeeData.employeeId });
+            } else {
+                query.where("LOWER(employee.email) = LOWER(:email)", { email: employeeData.email });
+            }
+            existing = await query.getOne();
+        } else if (employeeData.fullName && employeeData.phone) {
+            existing = await this.employeeRepository.createQueryBuilder("employee")
+                .where("LOWER(employee.fullName) = LOWER(:fullName)", { fullName: employeeData.fullName })
+                .andWhere("employee.phone = :phone", { phone: employeeData.phone })
+                .getOne();
+        } else if (employeeData.fullName) {
+            existing = await this.employeeRepository.createQueryBuilder("employee")
+                .where("LOWER(employee.fullName) = LOWER(:fullName)", { fullName: employeeData.fullName })
+                .getOne();
+        }
+
+        if (existing) {
+            skippedCount++;
+            continue;
+        }
+
+        // Group assignment logic
+        if (!employeeData.group || !employeeData.group.id) {
+            let matchedGroup: { id: string, name: string } | null = null;
+            if (employeeData.group?.name) {
+                const found = groups.find(g => g.name.toLowerCase().trim() === employeeData.group.name.toLowerCase().trim());
+                if (found) matchedGroup = { id: found.id.toString(), name: found.name };
+            }
+            if (!matchedGroup && employeeData.airline?.name) {
+                matchedGroup = this.findMatchingGroup(employeeData.airline.name, groups);
+            }
+            if (matchedGroup) employeeData.group = matchedGroup;
+        }
+
+        const resolvedPassword = await hashPassword(plainPassword ?? DEFAULT_PLAIN_PASSWORD, 10);
+
+        const newEmployee = this.employeeRepository.create({
+            ...employeeData,
+            password: resolvedPassword,
+            role: employeeData.role || "Member",
+            status: StatusEnum.Active
+        });
+        await this.employeeRepository.save(newEmployee);
+        createdCount++;
+    }
+
+    return new ApiResponse(statusCode.OK, {
+        totalInExcel,
+        createdCount,
+        skippedCount,
+        sheetDuplicateCount,
+        invalidCount,
+        totalProcessed: createdCount + skippedCount
+    }, `${createdCount} new created, ${skippedCount} DB matches skipped, ${sheetDuplicateCount} sheet duplicates skipped. Total rows: ${totalInExcel}`);
+}
+
+private mapExcelRowToEmployee(row: any): any {
+    const mapped: any = {
+        group: {},
+        airline: {},
+        returnAirline: {},
+        room: {}
+    };
+
+    const normRow: { [key: string]: any } = {};
+    for (const [key, value] of Object.entries(row)) {
+        normRow[key.toLowerCase().trim()] = value;
+    }
+
+    const str = (v: any): string | null => {
+        if (v === undefined || v === null) return null;
+        const s = String(v).trim();
+        return s === '' || s.toLowerCase() === 'nan' ? null : s;
+    };
+
+    // ── FLAT FIELDS ───────────────────────────────────────────────────
+
+    const globalId = str(normRow['globalid']);
+    const rawEmployeeId = str(normRow['employeeid']);
+
+    // No fallback — if employeeId is missing, it stays null
+    mapped.globalId       = globalId || null;
+    mapped.employeeId     = rawEmployeeId || null;
+    mapped._rawEmployeeId = rawEmployeeId || null;
+    mapped.localId        = str(normRow['localid']) || null;
+
+    // Name / contact
+    mapped.fullName = str(normRow['fullname']);
+    mapped.email    = str(normRow['email'])?.toLowerCase() || null;
+    mapped.phone    = str(normRow['phone']);
+
+    // Job / HR fields
+    mapped.jobTitle         = str(normRow['jobtitle']);
+    mapped.role             = str(normRow['role']);
+    mapped.function         = str(normRow['function']);
+    mapped.lineManager      = str(normRow['linemanager']);
+    mapped.fastTrack        = str(normRow['fasttrack']);
+    mapped.advancePack      = str(normRow['advancepack']);
+    mapped.regionDepartment = str(normRow['regiondepartment']);
+    mapped.flightStation    = str(normRow['flightstation']);
+    mapped.type             = str(normRow['type']);
+
+    // Personal
+    mapped.gender             = str(normRow['gender']);
+    mapped.passportNumber     = str(normRow['passportnumber']);
+    mapped.passportIssDate    = str(normRow['passportissdate']);
+    mapped.passportExpiryDate = str(normRow['passportexpirydate']);
+    mapped.nicNumber          = str(normRow['nicnumber']);
+    mapped.country            = str(normRow['country']);
+    mapped.arrivalTimeKUL     = str(normRow['arrivaltimekul']);
+
+    // Hotel
+    mapped.hotel = str(normRow['hotel']);
+
+    // Password
+    mapped.plainPassword = str(normRow['password']);
+
+    // ── GROUP (jsonb) ─────────────────────────────────────────────────
+    const groupRaw = str(
+        normRow['groupid (select from group tab)'] ??
+        normRow['groupid'] ??
+        normRow['group id']
+    );
+    if (groupRaw) mapped.group.name = groupRaw;
+
+    // ── AIRLINE (jsonb) ───────────────────────────────────────────────
+    const airlineName    = str(normRow['airlinename']);
+    const airlineDetails = str(normRow['airlinedetails']);
+    const depCity        = str(normRow['airlinedeparturecity']);
+    const depDate        = str(normRow['airlinedeparturedate']);
+    const depTime        = str(normRow['airlinedeparturetime']);
+
+    if (airlineName)    mapped.airline.name          = airlineName;
+    if (airlineDetails) mapped.airline.details        = airlineDetails;
+    if (depCity)        mapped.airline.departureCity  = depCity;
+    if (depDate)        mapped.airline.departureDate  = depDate;
+    if (depTime)        mapped.airline.departureTime  = depTime;
+
+    // ── RETURN AIRLINE (jsonb) ────────────────────────────────────────
+    const retName    = str(normRow['returnairlinename']);
+    const retDetails = str(normRow['returnairlinedetails']);
+    const retCity    = str(normRow['returnairlinedeparturecity']);
+    const retDate    = str(normRow['returnairlinedeparturedate']);
+    const retTime    = str(normRow['returnairlinedeparturetime']);
+
+    if (retName)    mapped.returnAirline.name          = retName;
+    if (retDetails) mapped.returnAirline.details        = retDetails;
+    if (retCity)    mapped.returnAirline.departureCity  = retCity;
+    if (retDate)    mapped.returnAirline.departureDate  = retDate;
+    if (retTime)    mapped.returnAirline.departureTime  = retTime;
+
+    // ── ROOM (jsonb) ──────────────────────────────────────────────────
+    const roomType   = str(normRow['roomtype']);
+    const roomNumber = str(normRow['roomnumber']);
+    if (roomType)   mapped.room.type   = roomType;
+    if (roomNumber) mapped.room.number = roomNumber;
+
+    // ── CLEAN UP empty nested objects → null ──────────────────────────
+    if (Object.keys(mapped.group).length === 0)         mapped.group         = null;
+    if (Object.keys(mapped.airline).length === 0)       mapped.airline       = null;
+    if (Object.keys(mapped.returnAirline).length === 0) mapped.returnAirline = null;
+    if (Object.keys(mapped.room).length === 0)          mapped.room          = null;
+
+    return mapped;
+}
 
     async assignGroup(identifier: string | number, groupId: number): Promise<ApiResponse<EmployeeEntity>> {
         let employee: EmployeeEntity | null = null;
@@ -471,117 +584,7 @@ export class EmployeeService {
         return new ApiResponse(statusCode.OK, employee, "Employee removed from group successfully");
     }
 
-    private mapExcelRowToEmployee(row: any): any {
-        const mapped: any = {
-            group: {},
-            airline: {},
-            returnAirline: {},
-            room: {}
-        };
-
-        // Normalise every key: lowercase + trim
-        const normRow: { [key: string]: any } = {};
-        for (const [key, value] of Object.entries(row)) {
-            normRow[key.toLowerCase().trim()] = value;
-        }
-
-        // Helper: safe string (skip undefined / null / NaN)
-        const str = (v: any): string | null => {
-            if (v === undefined || v === null) return null;
-            const s = String(v).trim();
-            return s === '' || s.toLowerCase() === 'nan' ? null : s;
-        };
-
-        // ── FLAT FIELDS ───────────────────────────────────────────────────
-
-        // IDs
-        const globalId = str(normRow['globalid']);
-        const rawEmployeeId = str(normRow['employeeid']); // FIX: store raw value separately
-
-        mapped.globalId   = globalId;
-        mapped.employeeId = rawEmployeeId ?? globalId;   // DB field still falls back to globalId
-        mapped._rawEmployeeId = rawEmployeeId;           // FIX: expose raw value for dedup (no fallback)
-        mapped.localId    = str(normRow['localid']);
-
-        // Name / contact
-        mapped.fullName = str(normRow['fullname']);
-        mapped.email    = str(normRow['email'])?.toLowerCase();
-        mapped.phone    = str(normRow['phone']);
-
-        // Job / HR fields
-        mapped.jobTitle         = str(normRow['jobtitle']);
-        mapped.role             = str(normRow['role']);
-        mapped.function         = str(normRow['function']);
-        mapped.lineManager      = str(normRow['linemanager']);
-        mapped.fastTrack        = str(normRow['fasttrack']);
-        mapped.advancePack      = str(normRow['advancepack']);
-        mapped.regionDepartment = str(normRow['regiondepartment']);
-        mapped.flightStation    = str(normRow['flightstation']);
-        mapped.type             = str(normRow['type']);
-
-        // Personal
-        mapped.gender             = str(normRow['gender']);
-        mapped.passportNumber     = str(normRow['passportnumber']);
-        mapped.passportIssDate    = str(normRow['passportissdate']);
-        mapped.passportExpiryDate = str(normRow['passportexpirydate']);
-        mapped.nicNumber          = str(normRow['nicnumber']);
-        mapped.country            = str(normRow['country']);
-        mapped.arrivalTimeKUL     = str(normRow['arrivaltimekul']);
-
-        // Hotel
-        mapped.hotel = str(normRow['hotel']);
-
-        // Password — plain text from Excel; hashed in bulkUpload, never stored raw
-        mapped.plainPassword = str(normRow['password']);
-
-        // ── GROUP (jsonb) ─────────────────────────────────────────────────
-        const groupRaw = str(
-            normRow['groupid (select from group tab)'] ??
-            normRow['groupid'] ??
-            normRow['group id']
-        );
-        if (groupRaw) mapped.group.name = groupRaw;
-
-        // ── AIRLINE (jsonb) ───────────────────────────────────────────────
-        const airlineName    = str(normRow['airlinename']);
-        const airlineDetails = str(normRow['airlinedetails']);
-        const depCity        = str(normRow['airlinedeparturecity']);
-        const depDate        = str(normRow['airlinedeparturedate']);
-        const depTime        = str(normRow['airlinedeparturetime']);
-
-        if (airlineName)    mapped.airline.name          = airlineName;
-        if (airlineDetails) mapped.airline.details        = airlineDetails;
-        if (depCity)        mapped.airline.departureCity  = depCity;
-        if (depDate)        mapped.airline.departureDate  = depDate;
-        if (depTime)        mapped.airline.departureTime  = depTime;
-
-        // ── RETURN AIRLINE (jsonb) ────────────────────────────────────────
-        const retName    = str(normRow['returnairlinename']);
-        const retDetails = str(normRow['returnairlinedetails']);
-        const retCity    = str(normRow['returnairlinedeparturecity']);
-        const retDate    = str(normRow['returnairlinedeparturedate']);
-        const retTime    = str(normRow['returnairlinedeparturetime']);
-
-        if (retName)    mapped.returnAirline.name          = retName;
-        if (retDetails) mapped.returnAirline.details        = retDetails;
-        if (retCity)    mapped.returnAirline.departureCity  = retCity;
-        if (retDate)    mapped.returnAirline.departureDate  = retDate;
-        if (retTime)    mapped.returnAirline.departureTime  = retTime;
-
-        // ── ROOM (jsonb) ──────────────────────────────────────────────────
-        const roomType   = str(normRow['roomtype']);
-        const roomNumber = str(normRow['roomnumber']);
-        if (roomType)   mapped.room.type   = roomType;
-        if (roomNumber) mapped.room.number = roomNumber;
-
-        // ── CLEAN UP empty nested objects → null ──────────────────────────
-        if (Object.keys(mapped.group).length === 0)         mapped.group         = null;
-        if (Object.keys(mapped.airline).length === 0)       mapped.airline       = null;
-        if (Object.keys(mapped.returnAirline).length === 0) mapped.returnAirline = null;
-        if (Object.keys(mapped.room).length === 0)          mapped.room          = null;
-
-        return mapped;
-    }
+   
 
     async syncGroups(): Promise<ApiResponse<any>> {
         const employees = await this.employeeRepository.find({

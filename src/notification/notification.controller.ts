@@ -39,6 +39,12 @@ export class NotificationController {
         res.status(result.statusCode).json(result);
     });
 
+    markAsRead = asyncHandler(async (req: Request, res: Response) => {
+        const id = Number(req.params.id);
+        const result = await this.notificationService.markAsRead(id);
+        res.status(result.statusCode).json(result);
+    });
+
     deleteNotification = asyncHandler(async (req: Request, res: Response) => {
         const id = Number(req.params.id);
         const result = await this.notificationService.deleteNotification(id);

@@ -18,6 +18,7 @@ export class NotificationRoute {
         this.router.get("/", this.notificationController.getAllNotifications);
         this.router.get("/:id", this.notificationController.getNotificationById);
         this.router.put("/mark-read", this.notificationController.markAllAsRead);
+        this.router.patch("/mark-read/:id", this.notificationController.markAsRead);
         this.router.put("/:id", validateRequest(UpdateNotificationSchema), this.notificationController.updateNotification);
         this.router.delete("/:id", this.notificationController.deleteNotification);
     }
