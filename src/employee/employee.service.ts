@@ -534,6 +534,173 @@ async bulkUploadMissing(fileBuffer: Buffer): Promise<ApiResponse<any>> {
     }, `${createdCount} new created, ${skippedCount} DB matches skipped, ${sheetDuplicateCount} sheet duplicates skipped. Total rows: ${totalInExcel}`);
 }
 
+async bulkUpdate(fileBuffer: Buffer): Promise<ApiResponse<any>> {
+    const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+    let updatedCount = 0;
+    let skippedCount = 0;
+    let notFoundCount = 0;
+    let sheetDuplicateCount = 0;
+    const totalInExcel = data.length;
+
+    const groups = await this.groupRepository.find();
+
+    const seenEmployeeIds = new Set<string>();
+    const seenEmails = new Set<string>();
+    const seenNamePhone = new Set<string>();
+
+    for (const row of data as any[]) {
+        const mappedData = this.mapExcelRowToEmployee(row);
+
+        const rawEmployeeId = mappedData._rawEmployeeId?.toLowerCase() || null;
+        const emailKey = mappedData.email?.toLowerCase() || null;
+        const namePhoneKey = (mappedData.fullName && mappedData.phone)
+            ? `${mappedData.fullName.toLowerCase().trim()}|${mappedData.phone.trim()}`
+            : null;
+
+        const isDupById = rawEmployeeId && rawEmployeeId !== '0' && seenEmployeeIds.has(rawEmployeeId);
+        const isDupByEmail = emailKey && emailKey !== 'na' && seenEmails.has(emailKey);
+        const isDupByNamePhone = !rawEmployeeId && !emailKey && namePhoneKey && seenNamePhone.has(namePhoneKey);
+
+        if (isDupById || isDupByEmail || isDupByNamePhone) {
+            sheetDuplicateCount++;
+            continue;
+        }
+
+        if (rawEmployeeId && rawEmployeeId !== '0') seenEmployeeIds.add(rawEmployeeId);
+        if (emailKey && emailKey !== 'na') seenEmails.add(emailKey);
+        if (!rawEmployeeId && !emailKey && namePhoneKey) seenNamePhone.add(namePhoneKey);
+
+        const { plainPassword, _rawEmployeeId, ...employeeData } = mappedData;
+
+        if (employeeData.employeeId === '0') employeeData.employeeId = null;
+        if (employeeData.globalId === '0') employeeData.globalId = null;
+        if (employeeData.email === 'na') employeeData.email = null;
+
+        const hasValidEmpId = employeeData.employeeId && employeeData.employeeId !== '0';
+        const hasValidEmail = employeeData.email && employeeData.email !== 'na';
+
+        let existing = null;
+        if (hasValidEmpId || hasValidEmail) {
+            const query = this.employeeRepository.createQueryBuilder("employee")
+                .addSelect("employee.password");
+            if (hasValidEmpId && hasValidEmail) {
+                query.where("(employee.employeeId = :employeeId OR LOWER(employee.email) = LOWER(:email))", {
+                    employeeId: employeeData.employeeId,
+                    email: employeeData.email
+                });
+            } else if (hasValidEmpId) {
+                query.where("employee.employeeId = :employeeId", { employeeId: employeeData.employeeId });
+            } else {
+                query.where("LOWER(employee.email) = LOWER(:email)", { email: employeeData.email });
+            }
+            existing = await query.getOne();
+        } else if (employeeData.fullName && employeeData.phone) {
+            existing = await this.employeeRepository.createQueryBuilder("employee")
+                .addSelect("employee.password")
+                .where("LOWER(employee.fullName) = LOWER(:fullName)", { fullName: employeeData.fullName })
+                .andWhere("employee.phone = :phone", { phone: employeeData.phone })
+                .getOne();
+        } else if (employeeData.fullName) {
+            existing = await this.employeeRepository.createQueryBuilder("employee")
+                .addSelect("employee.password")
+                .where("LOWER(employee.fullName) = LOWER(:fullName)", { fullName: employeeData.fullName })
+                .getOne();
+        }
+
+        if (!existing) {
+            notFoundCount++;
+            continue;
+        }
+
+        if (!employeeData.group || !employeeData.group.id) {
+            let matchedGroup: { id: string, name: string } | null = null;
+            if (employeeData.group?.name) {
+                const found = groups.find(g => g.name.toLowerCase().trim() === employeeData.group.name.toLowerCase().trim());
+                if (found) matchedGroup = { id: found.id.toString(), name: found.name };
+            }
+            if (!matchedGroup && employeeData.airline?.name) {
+                matchedGroup = this.findMatchingGroup(employeeData.airline.name, groups);
+            }
+            if (matchedGroup) employeeData.group = matchedGroup;
+        }
+
+        let hasChanges = false;
+        
+        const isDifferent = (oldVal: any, newVal: any) => {
+            if (newVal === undefined) return false;
+            const o = oldVal ?? null;
+            const n = newVal ?? null;
+            return o !== n;
+        };
+
+        const flatFields = [
+            'globalId', 'employeeId', 'localId', 'fullName', 'email', 'phone', 
+            'jobTitle', 'role', 'function', 'lineManager', 'fastTrack', 'advancePack', 
+            'regionDepartment', 'flightStation', 'type', 'gender', 'passportNumber', 
+            'passportIssDate', 'passportExpiryDate', 'nicNumber', 'country', 'arrivalTimeKUL', 'hotel'
+        ];
+        
+        for (const field of flatFields) {
+            if (isDifferent((existing as any)[field], employeeData[field])) {
+                hasChanges = true;
+                break;
+            }
+        }
+
+        if (!hasChanges) {
+            const jsonFields = ['group', 'airline', 'returnAirline', 'room'];
+            for (const field of jsonFields) {
+                const oldObj = (existing as any)[field] || {};
+                const newObj = employeeData[field] || {};
+                
+                const newKeys = Object.keys(newObj);
+                const oldKeys = Object.keys(oldObj);
+                
+                for (const k of newKeys) {
+                    if (oldObj[k] !== newObj[k]) {
+                        hasChanges = true;
+                        break;
+                    }
+                }
+                
+                if (hasChanges) break;
+            }
+        }
+        
+        if (plainPassword) {
+            const isPasswordMatch = (existing.password && plainPassword) 
+                ? await comparePassword(plainPassword, existing.password) 
+                : false;
+            
+            if (!isPasswordMatch) {
+                hasChanges = true;
+                const resolvedPassword = await hashPassword(plainPassword, 10);
+                employeeData.password = resolvedPassword;
+            }
+        }
+
+        if (hasChanges) {
+            Object.assign(existing, employeeData);
+            await this.employeeRepository.save(existing);
+            updatedCount++;
+        } else {
+            skippedCount++;
+        }
+    }
+
+    return new ApiResponse(statusCode.OK, {
+        totalInExcel,
+        updatedCount,
+        skippedCount,
+        notFoundCount,
+        sheetDuplicateCount,
+        totalProcessed: updatedCount + skippedCount + notFoundCount
+    }, `${updatedCount} updated, ${skippedCount} skipped (no changes), ${notFoundCount} not found, ${sheetDuplicateCount} sheet duplicates skipped. Total rows: ${totalInExcel}`);
+}
+
 private mapExcelRowToEmployee(row: any): any {
     const mapped: any = {
         group: {},

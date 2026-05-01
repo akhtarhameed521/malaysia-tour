@@ -70,6 +70,15 @@ export class EmployeeController {
         res.status(result.statusCode).json(result);
     });
 
+    bulkUpdate = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+        const file = req.file;
+        if (!file) {
+            throw new ApiError(statusCode.BadRequest, "No file uploaded");
+        }
+        const result = await this.employeeService.bulkUpdate(file.buffer);
+        res.status(result.statusCode).json(result);
+    });
+
     syncGroups = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
         const result = await this.employeeService.syncGroups();
         res.status(result.statusCode).json(result);
