@@ -8,8 +8,11 @@ import { ApiError } from "../common/helper/api-error.helper";
 import { statusCode } from "../common/messages/status-code.messages";
 import { In } from "typeorm";
 import * as path from "path";
+import * as fs from "fs";
+import { getVideoDurationInSeconds } from "get-video-duration";
 
 const GLOBAL_ROOM_NAME = "Shared Chat";
+const MAX_VIDEO_DURATION_SECONDS = 60; // 1 minute
 
 export class ChatService {
     private chatRoomRepository = AppDataSource.getRepository(ChatRoom);
@@ -115,7 +118,7 @@ export class ChatService {
     /**
      * Sends a message to the global shared chat room.
      */
-    async sendMessage(senderId: number, data: SendMessageDto, imagePath?: string): Promise<ApiResponse<ChatMessage>> {
+    async sendMessage(senderId: number, data: SendMessageDto, file?: Express.Multer.File): Promise<ApiResponse<ChatMessage>> {
         const { chatRoomId, content, messageType } = data;
 
         // Verify room exists
@@ -138,15 +141,36 @@ export class ChatService {
             throw new ApiError(statusCode.Forbidden, "Your chat access has been restricted");
         }
 
-        // Handle image path
+        // Handle attachments (image or video)
         let finalContent = content || "";
         let finalMessageType = messageType || "text";
 
-        if (imagePath) {
+        if (file) {
             const baseUrl = process.env.BASE_URL;
-            const imageUrl = `${baseUrl}/Uploads/${path.basename(imagePath)}`;
-            finalContent = imageUrl;
-            finalMessageType = "image";
+            const fileUrl = `${baseUrl}/Uploads/${path.basename(file.path)}`;
+            
+            if (file.mimetype.startsWith("image/")) {
+                finalContent = fileUrl;
+                finalMessageType = "image";
+            } else if (file.mimetype.startsWith("video/")) {
+                // Check video duration
+                try {
+                    const duration = await getVideoDurationInSeconds(file.path);
+                    if (duration > MAX_VIDEO_DURATION_SECONDS) {
+                        // Delete the file if it exceeds limit
+                        if (fs.existsSync(file.path)) {
+                            fs.unlinkSync(file.path);
+                        }
+                        throw new ApiError(statusCode.BadRequest, `video must be less than 1 minutes`);
+                    }
+                } catch (err: any) {
+                    if (err instanceof ApiError) throw err;
+                    throw new ApiError(statusCode.BadRequest, "Video duration must be less than 60 seconds");
+                }
+                
+                finalContent = fileUrl;
+                finalMessageType = "video";
+            }
         }
 
         const message = this.chatMessageRepository.create({

@@ -26,8 +26,8 @@ export class ChatController {
     sendMessage = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
         const senderId = req.user!.id;
         const files = req.files as Express.Multer.File[];
-        const imagePath = files?.[0]?.path;
-        const result = await this.chatService.sendMessage(senderId, req.body, imagePath);
+        const file = files?.[0];
+        const result = await this.chatService.sendMessage(senderId, req.body, file);
 
         // Emit socket event for real-time update
         try {
