@@ -123,9 +123,11 @@ export class EmployeeService {
                 const matchedRoom = rooms.find(r => {
                     const rHotelName = norm(r.hotel?.name);
                     const rNum = norm(r.roomNumber);
-                    // Match room number exactly, but hotel name flexibly
+                    const rId = String(r.id);
+                    
+                    // Match room number or record ID, ensuring hotel name also aligns
                     const hotelMatch = !empHotelNorm || rHotelName === empHotelNorm || rHotelName.includes(empHotelNorm) || empHotelNorm.includes(rHotelName);
-                    return hotelMatch && rNum === empRoomNum;
+                    return hotelMatch && (rNum === empRoomNum || rId === empRoomNum);
                 });
 
                 employeeData.room = {
@@ -135,13 +137,15 @@ export class EmployeeService {
             }
 
             // 3. Airline Matching
-            if (emp.airline && emp.airline.name) {
-                const empAirNorm = norm(emp.airline.name);
+            if (emp.airline) {
+                const empAirName = norm(emp.airline.name);
+                const empAirDetails = norm(emp.airline.details);
+
                 const matchedAirline = airlines.find(a => {
                     const aName = norm(a.name);
-                    // Match if names are similar or start with the same word
-                    const wordMatch = aName.split(' ')[0] === empAirNorm.split(' ')[0] && aName.split(' ')[0].length > 2;
-                    return aName === empAirNorm || aName.includes(empAirNorm) || empAirNorm.includes(aName) || wordMatch;
+                    // Match against name OR details (often contains flight codes)
+                    return (empAirName && (aName === empAirName || aName.includes(empAirName) || empAirName.includes(aName))) ||
+                           (empAirDetails && (aName === empAirDetails || aName.includes(empAirDetails) || empAirDetails.includes(aName)));
                 });
                 employeeData.airline = {
                     ...emp.airline,
@@ -150,12 +154,14 @@ export class EmployeeService {
             }
 
             // 4. Return Airline Matching
-            if (emp.returnAirline && emp.returnAirline.name) {
-                const empAirNorm = norm(emp.returnAirline.name);
+            if (emp.returnAirline) {
+                const empAirName = norm(emp.returnAirline.name);
+                const empAirDetails = norm(emp.returnAirline.details);
+
                 const matchedReturnAirline = returnAirlines.find(ra => {
                     const raName = norm(ra.name);
-                    const wordMatch = raName.split(' ')[0] === empAirNorm.split(' ')[0] && raName.split(' ')[0].length > 2;
-                    return raName === empAirNorm || raName.includes(empAirNorm) || empAirNorm.includes(raName) || wordMatch;
+                    return (empAirName && (raName === empAirName || raName.includes(empAirName) || empAirName.includes(raName))) ||
+                           (empAirDetails && (raName === empAirDetails || raName.includes(empAirDetails) || empAirDetails.includes(raName)));
                 });
                 employeeData.returnAirline = {
                     ...emp.returnAirline,
