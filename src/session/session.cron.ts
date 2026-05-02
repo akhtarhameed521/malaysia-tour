@@ -14,99 +14,106 @@ export const startSessionCronJobs = () => {
             const targetTimeZone = process.env.TIMEZONE || "Asia/Karachi"; 
             const nowInTZ = new Date(new Date().toLocaleString("en-US", { timeZone: targetTimeZone }));
             
-            const now = nowInTZ;
-            // Add 15 minutes to current time
-            now.setMinutes(now.getMinutes() + 15);
-
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, "0");
-            const day = String(now.getDate()).padStart(2, "0");
-
-            const hours = String(now.getHours()).padStart(2, "0");
-            const minutes = String(now.getMinutes()).padStart(2, "0");
-
-            const dateStr = `${year}-${month}-${day}`;
-            const timeStr = `${hours}:${minutes}`;
-
-            console.log(`[Session Cron] Checking for sessions starting at ${dateStr} ${timeStr} (15-minute reminder)`);
-
             const sessionRepository = AppDataSource.getRepository(Session);
             const employeeRepository = AppDataSource.getRepository(EmployeeEntity);
             const notificationRepository = AppDataSource.getRepository(Notification);
 
-            // Fetch sessions exactly matching the time
-            const sessions = await sessionRepository.createQueryBuilder("session")
-                .leftJoinAndSelect("session.groups", "group")
-                .where("session.date = :date", { date: dateStr })
-                .andWhere("EXTRACT(HOUR FROM session.time) = :hours", { hours: parseInt(hours) })
-                .andWhere("EXTRACT(MINUTE FROM session.time) = :minutes", { minutes: parseInt(minutes) })
-                .getMany();
+            // Time offsets to check: 0 minutes (starting now) and 15 minutes (reminder)
+            const checkPoints = [
+                { offset: 0, titlePrefix: "Session Starting Now", messageSuffix: "is starting now", type: "session_start" },
+                { offset: 15, titlePrefix: "Session Reminder", messageSuffix: "is starting in 15 minutes", type: "session_reminder" }
+            ];
 
-            if (sessions.length > 0) {
-                console.log(`[Session Cron] Found ${sessions.length} sessions matching criteria.`);
-            }
+            for (const cp of checkPoints) {
+                const checkTime = new Date(nowInTZ.getTime() + cp.offset * 60000);
+                
+                const year = checkTime.getFullYear();
+                const month = String(checkTime.getMonth() + 1).padStart(2, "0");
+                const day = String(checkTime.getDate()).padStart(2, "0");
 
-            for (const session of sessions) {
-                let targetEmployees: EmployeeEntity[] = [];
+                const hours = String(checkTime.getHours()).padStart(2, "0");
+                const minutes = String(checkTime.getMinutes()).padStart(2, "0");
 
-                // 1. Get employees by group
-                if (session.groups && session.groups.length > 0) {
-                    for (const group of session.groups) {
-                        const employees = await employeeRepository.find({
-                            where: {
-                                group: Raw((alias) => `${alias} ->> 'id' = :gId`, { gId: group.id.toString() })
-                            }
-                        });
-                        targetEmployees.push(...employees);
-                    }
+                const dateStr = `${year}-${month}-${day}`;
+                const timeStr = `${hours}:${minutes}`;
+
+                // console.log(`[Session Cron] Checking for sessions starting at ${dateStr} ${timeStr} (${cp.offset} min offset)`);
+
+                // Fetch sessions matching the calculated time
+                const sessions = await sessionRepository.createQueryBuilder("session")
+                    .leftJoinAndSelect("session.groups", "group")
+                    .where("session.date = :date", { date: dateStr })
+                    .andWhere("EXTRACT(HOUR FROM session.time) = :hours", { hours: parseInt(hours) })
+                    .andWhere("EXTRACT(MINUTE FROM session.time) = :minutes", { minutes: parseInt(minutes) })
+                    .getMany();
+
+                if (sessions.length > 0) {
+                    console.log(`[Session Cron] Found ${sessions.length} sessions for ${cp.type} (${timeStr}).`);
                 }
 
-                // Remove duplicates by employee ID
-                const uniqueEmployeesMap = new Map<number, EmployeeEntity>();
-                for (const emp of targetEmployees) {
-                    uniqueEmployeesMap.set(emp.id, emp);
-                }
-                const uniqueEmployees = Array.from(uniqueEmployeesMap.values());
+                for (const session of sessions) {
+                    let targetEmployees: EmployeeEntity[] = [];
 
-                if (uniqueEmployees.length > 0) {
-                    const title = `Session Reminder: ${session.sessionTitle}`;
-                    const message = `Your session "${session.sessionTitle}" is starting in 15 minutes at ${session.location}.`;
-
-                    console.log(`[Session Cron] Sending reminder for "${session.sessionTitle}" to ${uniqueEmployees.length} unique employees.`);
-
-                    // 1. Create DB records for Notifications
-                    const notificationsToSave = uniqueEmployees.map(emp => {
-                        return notificationRepository.create({
-                            title,
-                            message,
-                            type: "session_reminder",
-                            employee: emp
-                        });
-                    });
-                    await notificationRepository.save(notificationsToSave);
-
-                    // 2. Send Multicast Push
-                    const tokens = uniqueEmployees.map(e => e.fcmToken).filter(token => !!token);
-
-                    if (tokens.length > 0) {
-                        const payload = {
-                            notification: { title, body: message },
-                            data: { click_action: "FLUTTER_NOTIFICATION_CLICK", type: "session_reminder", sessionId: session.id.toString() }
-                        };
-
-                        try {
-                            const response = await admin.messaging().sendEachForMulticast({
-                                tokens: tokens as string[],
-                                notification: payload.notification,
-                                data: payload.data
+                    // 1. Get employees by group
+                    if (session.groups && session.groups.length > 0) {
+                        for (const group of session.groups) {
+                            const employees = await employeeRepository.find({
+                                where: {
+                                    group: Raw((alias) => `${alias} ->> 'id' = :gId`, { gId: group.id.toString() })
+                                }
                             });
-                            console.log(`Successfully sent ${response.successCount} session reminder push notifications.`);
-                        } catch (error) {
-                            console.error("Error sending session reminder push notifications:", error);
+                            targetEmployees.push(...employees);
+                        }
+                    }
+
+                    // Remove duplicates by employee ID
+                    const uniqueEmployeesMap = new Map<number, EmployeeEntity>();
+                    for (const emp of targetEmployees) {
+                        uniqueEmployeesMap.set(emp.id, emp);
+                    }
+                    const uniqueEmployees = Array.from(uniqueEmployeesMap.values());
+
+                    if (uniqueEmployees.length > 0) {
+                        const title = `${cp.titlePrefix}: ${session.sessionTitle}`;
+                        const message = `Your session "${session.sessionTitle}" ${cp.messageSuffix} at ${session.location}.`;
+
+                        console.log(`[Session Cron] Sending ${cp.type} for "${session.sessionTitle}" to ${uniqueEmployees.length} employees.`);
+
+                        // 1. Create DB records for Notifications
+                        const notificationsToSave = uniqueEmployees.map(emp => {
+                            return notificationRepository.create({
+                                title,
+                                message,
+                                type: cp.type as any,
+                                employee: emp
+                            });
+                        });
+                        await notificationRepository.save(notificationsToSave);
+
+                        // 2. Send Multicast Push
+                        const tokens = uniqueEmployees.map(e => e.fcmToken).filter(token => !!token);
+
+                        if (tokens.length > 0) {
+                            const payload = {
+                                notification: { title, body: message },
+                                data: { click_action: "FLUTTER_NOTIFICATION_CLICK", type: cp.type, sessionId: session.id.toString() }
+                            };
+
+                            try {
+                                const response = await admin.messaging().sendEachForMulticast({
+                                    tokens: tokens as string[],
+                                    notification: payload.notification,
+                                    data: payload.data
+                                });
+                                console.log(`Successfully sent ${response.successCount} ${cp.type} push notifications.`);
+                            } catch (error) {
+                                console.error(`Error sending ${cp.type} push notifications:`, error);
+                            }
                         }
                     }
                 }
             }
+
             // --- Airline Departure Reminder (6 hours before) ---
             const airlineNow = new Date(new Date().toLocaleString("en-US", { timeZone: targetTimeZone }));
             airlineNow.setHours(airlineNow.getHours() + 6);
