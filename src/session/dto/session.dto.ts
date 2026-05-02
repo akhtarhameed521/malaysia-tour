@@ -4,9 +4,9 @@ export const CreateSessionSchema = z.object({
   sessionTitle: z.string().min(1, "Session title is required"),
   time: z.string().min(1, "Time is required"), // Relaxed for bulk upload
   date: z.string().min(1, "Date is required"), // Relaxed for bulk upload
-  location: z.string().min(1, "Location is required"),
+  location: z.string().optional().nullable(),
   speaker: z.string().optional().nullable(),
-  track: z.string().optional(),
+  track: z.string().optional().nullable(),
   airlineName: z.string().optional(),
   groupIds: z.array(z.coerce.number().int().positive()).optional(),
 }).strict();
