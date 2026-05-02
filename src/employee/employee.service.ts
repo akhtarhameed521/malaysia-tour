@@ -169,6 +169,7 @@ export class EmployeeService {
                 };
             }
 
+            delete employeeData.sessions;
             return employeeData;
         });
         
