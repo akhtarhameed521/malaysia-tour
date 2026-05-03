@@ -11,7 +11,7 @@ export const startSessionCronJobs = () => {
     cron.schedule("* * * * *", async () => {
         try {
             // Get current time in the target timezone
-            const targetTimeZone = process.env.TIMEZONE || "Asia/Karachi"; 
+            const targetTimeZone = process.env.TIMEZONE || "Asia/Kuala_Lumpur"; 
             const nowInTZ = new Date(new Date().toLocaleString("en-US", { timeZone: targetTimeZone }));
             
             const sessionRepository = AppDataSource.getRepository(Session);
