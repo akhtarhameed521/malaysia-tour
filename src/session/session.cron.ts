@@ -21,7 +21,7 @@ export const startSessionCronJobs = () => {
             // Time offsets to check: 0 minutes (starting now) and 15 minutes (reminder)
             const checkPoints = [
                 { offset: 0, titlePrefix: "Session Starting Now", messageSuffix: "is starting now", type: "session_start" },
-                { offset: 15, titlePrefix: "Session Reminder", messageSuffix: "is starting in 15 minutes", type: "session_reminder" }
+                { offset: 15, titlePrefix: "Session Reminder", messageSuffix: "starts in 15 minutes", type: "session_reminder" }
             ];
 
             for (const cp of checkPoints) {
@@ -74,10 +74,16 @@ export const startSessionCronJobs = () => {
                     const uniqueEmployees = Array.from(uniqueEmployeesMap.values());
 
                     if (uniqueEmployees.length > 0) {
-                        const title = `${cp.titlePrefix}: ${session.sessionTitle}`;
-                        const message = `Your session "${session.sessionTitle}" ${cp.messageSuffix} at ${session.location}.`;
+                        const sessionTitle = session.sessionTitle;
+                        const titleText = sessionTitle || "Upcoming Session";
+                        const title = `${cp.titlePrefix}: ${titleText}`;
+                        const locationStr = session.location ? ` at ${session.location}` : "";
+                        
+                        const message = sessionTitle 
+                            ? `Your session "${sessionTitle}" ${cp.messageSuffix}${locationStr}.`
+                            : `Your upcoming session ${cp.messageSuffix}${locationStr}.`;
 
-                        console.log(`[Session Cron] Sending ${cp.type} for "${session.sessionTitle}" to ${uniqueEmployees.length} employees.`);
+                        console.log(`[Session Cron] Sending ${cp.type} for "${titleText}" to ${uniqueEmployees.length} employees.`);
 
                         // 1. Create DB records for Notifications
                         const notificationsToSave = uniqueEmployees.map(emp => {
